@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Neon Pong — Энергетическое поле</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .glow-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .fog {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .fog-top {
+      background: linear-gradient(to bottom,
+        rgba(255, 0, 255, 0.15) 0%,
+        rgba(255, 0, 255, 0.12) 5%,
+        rgba(255, 0, 255, 0.09) 15%,
+        rgba(255, 0, 255, 0.06) 30%,
+        rgba(255, 0, 255, 0.03) 50%,
+        rgba(255, 0, 255, 0.01) 75%,
+        transparent 100%);
+    }
+
+    .fog-bottom {
+      background: linear-gradient(to top,
+        rgba(0, 150, 255, 0.15) 0%,
+        rgba(0, 150, 255, 0.12) 5%,
+        rgba(0, 150, 255, 0.09) 15%,
+        rgba(0, 150, 255, 0.06) 30%,
+        rgba(0, 150, 255, 0.03) 50%,
+        rgba(0, 150, 255, 0.01) 75%,
+        transparent 100%);
+    }
+
+    .fog-left {
+      background: linear-gradient(to right,
+        rgba(255, 0, 255, 0.08) 0%,
+        rgba(255, 0, 255, 0.06) 10%,
+        rgba(255, 0, 255, 0.04) 20%,
+        rgba(255, 0, 255, 0.03) 35%,
+        rgba(255, 0, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.03) 65%,
+        rgba(0, 150, 255, 0.04) 80%,
+        rgba(0, 150, 255, 0.06) 90%,
+        rgba(0, 150, 255, 0.08) 100%);
+    }
+
+    .fog-right {
+      background: linear-gradient(to left,
+        rgba(255, 0, 255, 0.08) 0%,
+        rgba(255, 0, 255, 0.06) 10%,
+        rgba(255, 0, 255, 0.04) 20%,
+        rgba(255, 0, 255, 0.03) 35%,
+        rgba(255, 0, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.03) 65%,
+        rgba(0, 150, 255, 0.04) 80%,
+        rgba(0, 150, 255, 0.06) 90%,
+        rgba(0, 150, 255, 0.08) 100%);
+    }
+
+    #score-display {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Courier New', monospace;
+      font-size: 24px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 10px #ffffff;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+
+    .player-score {
+      color: #0096ff;
+      text-shadow: 0 0 15px #0096ff;
+    }
+
+    .ai-score {
+      color: #ff00ff;
+      text-shadow: 0 0 15px #ff00ff;
+    }
+
+    .score-separator {
+      color: #ffffff;
+      margin: 0 15px;
+    }
+
+    #victory-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1;
+    }
+
+    .victory-message {
+      font-family: 'Courier New', monospace;
+      font-size: 48px;
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 0 0 20px currentColor;
+      animation: pulse 0.5s infinite;
+    }
+
+    .victory-player {
+      color: #0096ff;
+    }
+
+    .victory-ai {
+      color: #ff00ff;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="glow-container">
+    <div class="fog fog-top"></div>
+    <div class="fog fog-bottom"></div>
+    <div class="fog fog-left"></div>
+    <div class="fog fog-right"></div>
+  </div>
+
+  <div id="score-display">
+    <span class="player-score" id="player-score">0</span>
+    <span class="score-separator">:</span>
+    <span class="ai-score" id="ai-score">0</span>
+  </div>
+
+  <div id="victory-screen">
+    <div class="victory-message" id="victory-message"></div>
+  </div>
+
+  <script>
+    // =====================================================
+    // НАСТРОЙКИ ИГРЫ
+    // =====================================================
+    const GameSettings = Object.freeze({
+      ZONE_HEIGHT_RATIO: 0.5,
+
+      SIZE_CONFIG: {
+        HIT_DECREASE: 1,
+        GOAL_DECREASE: 5,
+        MIN_SIZE: 20,
+        MAX_SIZE: 300
+      },
+
+      DRAG_CONFIG: {
+        ENABLED: true,
+        COEFFICIENT: 0.0008,
+        MIN_SPEED: 3.0,
+        MAX_SPEED: 10.0,
+        DECELERATION: 0.997
+      },
+
+      PHYSICS: {
+        REBOUND_POWER: 0.9,
+        SPIN_INFLUENCE: 8,
+        SPIN_POWER_BOOST: 2,
+        SPIN_ENERGY_TRANSFER: 1,
+        PLATFORM_TRANSFER_X: 1,
+        PLATFORM_TRANSFER_Y: 1,
+        APPROACH_POWER: 0.03,
+        ANGLE_EFFECT: 0.9,
+        SPIN_TRANSFER_X: 1.5,
+        SPIN_TRANSFER_Y: 1.5,
+        SPIN_INFLUENCE_MOVE: 1.2,
+        SPIN_DECAY_FLIGHT: 0.97,
+        SURFACE: {
+          WALL_REBOUND_FACTOR: 1.2,
+          PLATFORM_SPIN_FACTOR: 0.8,
+          SPIN_LOSS_ON_WALL: 0.7,
+          SPIN_LOSS_ON_PLATFORM: 0.5
+        }
+      },
+
+      GOAL_CONFIG: {
+        INITIAL_OPENING: 0,
+        HIT_OPEN_INCREMENT: 5,
+        BLOCK_RECOVERY: 2,
+        MAX_OPENING: 100,
+        WALL_COLOR_INACTIVE: '#333333',
+      },
+
+      // НАСТРОЙКИ ЭНЕРГЕТИЧЕСКОГО ПОЛЯ
+      FORCE_FIELD: {
+        ENABLED: true,
+        RADIUS: 130,
+        MAX_FORCE: 0.8,
+        MIN_FORCE: 0.15,
+        FALLOFF: 2.0,
+        ENERGY_COLOR: {
+          PLAYER: '#0096ff',
+          AI: '#ff00ff'
+        },
+        PULSE_SPEED: 0.008,
+        VISUAL_INTENSITY: 0.6
+      },
+
+      BALL_MAX_SPEED: 14,
+      PLATFORM_MAX_SPEED: 14,
+      PLATFORM_INERTIA: 0.94,
+      PLATFORM_FOLLOW_BASE: 0.15,
+      PLATFORM_FOLLOW_FACTOR: 0.001,
+      MAX_FOLLOW_STRENGTH: 0.35,
+      BALL_SUBSTEPS: 4,
+      COLLISION_EFFECT_COOLDOWN: 5,
+    });
+
+    // =====================================================
+    // ЭЛЕМЕНТЫ СТРАНИЦЫ
+    // =====================================================
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const playerScoreElement = document.getElementById('player-score');
+    const aiScoreElement = document.getElementById('ai-score');
+    const victoryScreen = document.getElementById('victory-screen');
+    const victoryMessage = document.getElementById('victory-message');
+
+    // =====================================================
+    // ПЕРЕМЕННЫЕ
+    // =====================================================
+    let frameCounter = 0;
+    let controlMode = 'AI';
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function initializePlayer() {
+      return {
+        x: canvas.width / 2 - 50,
+        y: canvas.height - 70,
+        width: 100,
+        height: 12,
+        minY: canvas.height - (canvas.height * GameSettings.ZONE_HEIGHT_RATIO),
+        maxY: canvas.height - 30,
+        originalWidth: 100,
+        originalHeight: 12,
+        hits: 0,
+        sizePercent: 100,
+        active: true,
+        curveHeight: 6,
+        vx: 0,
+        vy: 0,
+        targetX: canvas.width / 2 - 50,
+        targetY: canvas.height - 70,
+        goal: { openingPercent: GameSettings.GOAL_CONFIG.INITIAL_OPENING, isOpen: function() { return this.openingPercent > 0; } },
+        fieldPulse: 0
+      };
+    }
+
+    function initializeAI() {
+      return {
+        x: canvas.width / 2 - 50,
+        y: 70,
+        width: 100,
+        height: 12,
+        minY: canvas.height * GameSettings.ZONE_HEIGHT_RATIO,
+        maxY: 30,
+        reactionTime: 0.07,
+        errorMargin: 15,
+        originalWidth: 100,
+        originalHeight: 12,
+        hits: 0,
+        sizePercent: 100,
+        active: true,
+        curveHeight: 6,
+        vx: 0,
+        vy: 0,
+        goal: { openingPercent: GameSettings.GOAL_CONFIG.INITIAL_OPENING, isOpen: function() { return this.openingPercent > 0; } },
+        fieldPulse: 0
+      };
+    }
+
+    function initializeBall() {
+      return {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        radius: 8,
+        dx: 5 * (Math.random() > 0.5 ? 1 : -1),
+        dy: -5,
+        spin: 0,
+        speedMult: 1.0,
+        active: true,
+        color: '#ffffff',
+        effect: null,
+        trail: [],
+        lastEffectFrame: 0,
+        lastFieldForceFrame: 0
+      };
+    }
+
+    let player = initializePlayer();
+    let ai = initializeAI();
+    const ball = initializeBall();
+    let playerScore = 0;
+    let aiScore = 0;
+    let lastPlayerX = player.x, lastPlayerY = player.y;
+    let lastAiX = ai.x, lastAiY = ai.y;
+    let touchActive = false;
+    let lastTouchX = 0, lastTouchY = 0;
+    let gameActive = true;
+    const particles = [];
+    const sparks = [];
+    const fieldParticles = [];
+
+    // =====================================================
+    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+    // =====================================================
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function createParticle(x, y, color, count = 5) {
+      for (let i = 0; i < count; i++) {
+        particles.push({ x, y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, radius: 2, color, life: 1.0 });
+      }
+    }
+
+    function createSparks(x, y, color, count = 8, force = 1.0) {
+      for (let i = 0; i < count; i++) {
+        sparks.push({ x, y, vx: (Math.random() - 0.5) * 8 * force, vy: (Math.random() - 0.5) * 8 * force, radius: 1 + Math.random() * 2, color, life: 0.8 + Math.random() * 0.4, fadeSpeed: 0.02 + Math.random() * 0.03 });
+      }
+    }
+
+    function createSpinSparks(x, y, spin, count = 12) {
+      const spinStrength = Math.min(2.0, Math.abs(spin) / 10);
+      if (spinStrength < 0.3) return;
+      const color = spin > 0 ? '#00ffff' : '#ff00ff';
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * ball.radius * 0.8;
+        const offsetX = Math.cos(angle) * distance;
+        const offsetY = Math.sin(angle) * distance;
+        const sparkAngle = angle + (spin > 0 ? Math.PI / 2 : -Math.PI / 2);
+        const speed = 1 + Math.random() * 3 * spinStrength;
+        sparks.push({ x: x + offsetX, y: y + offsetY, vx: Math.cos(sparkAngle) * speed, vy: Math.sin(sparkAngle) * speed, radius: 1 + Math.random() * 2 * spinStrength, color, life: 0.6 + Math.random() * 0.4, fadeSpeed: 0.03 + Math.random() * 0.04 });
+      }
+    }
+
+    function createFlightSparks() {
+      if (!ball.active) return;
+      const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (speed < 3) return;
+      if (Math.random() < 0.15) {
+        const angle = Math.atan2(ball.dy, ball.dx);
+        const offsetAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
+        const distance = ball.radius * 0.7;
+        const sparkX = ball.x - Math.cos(angle) * distance;
+        const sparkY = ball.y - Math.sin(angle) * distance;
+        for (let i = 0; i < 1 + Math.floor(Math.random() * 2); i++) {
+          const sparkSpeed = 1 + Math.random() * 2;
+          sparks.push({ x: sparkX, y: sparkY, vx: Math.cos(offsetAngle) * sparkSpeed + (Math.random() - 0.5) * 0.5, vy: Math.sin(offsetAngle) * sparkSpeed + (Math.random() - 0.5) * 0.5, radius: 0.8 + Math.random() * 1.2, color: '#ffffff', life: 0.4 + Math.random() * 0.3, fadeSpeed: 0.03 + Math.random() * 0.02 });
+        }
+      }
+    }
+
+    function calculateSpinRebound(ball, platform, isWall = false) {
+      const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (currentSpeed < 0.1) return { dx: ball.dx, dy: ball.dy, spin: ball.spin };
+      const spinStrength = Math.min(1, Math.abs(ball.spin) / 30);
+      const spinDirection = Math.sign(ball.spin);
+      const powerBoost = 1 + (spinStrength * GameSettings.PHYSICS.SPIN_POWER_BOOST);
+      const spinEnergy = Math.abs(ball.spin) * GameSettings.PHYSICS.SPIN_ENERGY_TRANSFER;
+      const turnAngle = spinDirection * spinStrength * GameSettings.PHYSICS.SPIN_INFLUENCE;
+      const flightAngle = Math.atan2(ball.dy, ball.dx);
+      const newAngle = flightAngle + turnAngle * 0.1;
+      let newDx = Math.cos(newAngle) * (currentSpeed * powerBoost + spinEnergy);
+      let newDy = Math.sin(newAngle) * (currentSpeed * powerBoost + spinEnergy);
+      let spinLoss = isWall ? GameSettings.PHYSICS.SURFACE.SPIN_LOSS_ON_WALL : GameSettings.PHYSICS.SURFACE.SPIN_LOSS_ON_PLATFORM;
+      const newSpin = ball.spin * spinLoss;
+      return { dx: newDx, dy: newDy, spin: newSpin };
+    }
+
+    function applyAirDrag() {
+      if (!GameSettings.DRAG_CONFIG.ENABLED || !ball.active) return;
+      const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (currentSpeed < 0.5) return;
+      const dragForce = GameSettings.DRAG_CONFIG.COEFFICIENT * currentSpeed * currentSpeed;
+      const angle = Math.atan2(ball.dy, ball.dx);
+      const speedReduction = dragForce / currentSpeed;
+      ball.dx -= Math.cos(angle) * speedReduction;
+      ball.dy -= Math.sin(angle) * speedReduction;
+      ball.dx *= GameSettings.DRAG_CONFIG.DECELERATION;
+      ball.dy *= GameSettings.DRAG_CONFIG.DECELERATION;
+      const newSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (newSpeed > GameSettings.DRAG_CONFIG.MAX_SPEED) {
+        const scale = GameSettings.DRAG_CONFIG.MAX_SPEED / newSpeed;
+        ball.dx *= scale; ball.dy *= scale;
+      }
+      const finalSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (finalSpeed < 2.0 && finalSpeed > 0.1) {
+        const minScale = 2.0 / finalSpeed;
+        ball.dx *= minScale; ball.dy *= minScale;
+      }
+    }
+
+    function limitBallSpeed() {
+      if (!ball.active) return;
+      const currentSpeed = Math.hypot(ball.dx, ball.dy);
+      if (currentSpeed > GameSettings.BALL_MAX_SPEED) {
+        const scale = GameSettings.BALL_MAX_SPEED / currentSpeed;
+        ball.dx *= scale; ball.dy *= scale;
+      }
+    }
+
+    function limitPlatformSpeed(platform) {
+      if (!platform.active) return;
+      const currentSpeed = Math.hypot(platform.vx, platform.vy);
+      if (currentSpeed > GameSettings.PLATFORM_MAX_SPEED) {
+        const scale = GameSettings.PLATFORM_MAX_SPEED / currentSpeed;
+        platform.vx *= scale; platform.vy *= scale;
+      }
+    }
+
+    function applyPlatformInertia(platform) {
+      if (!platform.active) return;
+      platform.vx *= GameSettings.PLATFORM_INERTIA;
+      platform.vy *= GameSettings.PLATFORM_INERTIA;
+      if (Math.abs(platform.vx) < 0.05) platform.vx = 0;
+      if (Math.abs(platform.vy) < 0.05) platform.vy = 0;
+    }
+
+    function decreasePlatform(platform, amount) {
+      platform.sizePercent = Math.max(GameSettings.SIZE_CONFIG.MIN_SIZE, platform.sizePercent - amount);
+      if (platform.sizePercent <= GameSettings.SIZE_CONFIG.MIN_SIZE) {
+        platform.active = false;
+        platform.width = 0;
+        for (let i = 0; i < 20; i++) {
+          createSparks(platform.x + platform.originalWidth / 2, platform.y, platform === player ? '#0096ff' : '#ff00ff', 15, 1.5);
+        }
+        checkVictory();
+        return true;
+      }
+      const oldWidth = platform.width;
+      platform.width = (platform.originalWidth * platform.sizePercent) / 100;
+      platform.height = (platform.originalHeight * platform.sizePercent) / 100;
+      platform.curveHeight = (6 * platform.sizePercent) / 100;
+      platform.x = platform.x + (oldWidth - platform.width) / 2;
+      return false;
+    }
+
+    function checkVictory() {
+      if (!player.active && ai.active) { showVictory('AI ПОБЕДИЛ!', 'victory-ai'); gameActive = false; ball.active = false; }
+      else if (player.active && !ai.active) { showVictory('ИГРОК ПОБЕДИЛ!', 'victory-player'); gameActive = false; ball.active = false; }
+    }
+
+    function showVictory(message, className) {
+      victoryMessage.textContent = message;
+      victoryMessage.className = `victory-message ${className}`;
+      victoryScreen.style.display = 'flex';
+      setTimeout(() => { resetGame(); }, 3000);
+    }
+
+    function resetGame() {
+      player.active = true; player.sizePercent = 100; player.width = player.originalWidth; player.height = player.originalHeight; player.curveHeight = 6;
+      player.x = canvas.width / 2 - player.width / 2; player.y = canvas.height - 70; player.hits = 0; player.vx = 0; player.vy = 0;
+      player.goal.openingPercent = GameSettings.GOAL_CONFIG.INITIAL_OPENING;
+      ai.active = true; ai.sizePercent = 100; ai.width = ai.originalWidth; ai.height = ai.originalHeight; ai.curveHeight = 6;
+      ai.x = canvas.width / 2 - ai.width / 2; ai.y = 70; ai.hits = 0; ai.vx = 0; ai.vy = 0;
+      ai.goal.openingPercent = GameSettings.GOAL_CONFIG.INITIAL_OPENING;
+      playerScore = 0; aiScore = 0;
+      resetBall();
+      victoryScreen.style.display = 'none';
+      gameActive = true;
+      controlMode = 'AI';
+      smartPlayer = new SmartController(player, false);
+      updateScoreDisplay();
+    }
+
+    function resetBall() {
+      ball.active = false;
+      ball.x = canvas.width / 2; ball.y = canvas.height / 2;
+      ball.dx = 5 * (Math.random() > 0.5 ? 1 : -1); ball.dy = -5;
+      ball.spin = 0; ball.speedMult = 1.0; ball.color = '#ffffff'; ball.effect = null; ball.trail = [];
+      setTimeout(() => { ball.active = true; }, 1000);
+    }
+
+    function updateScoreDisplay() {
+      const playerStatus = player.active ? `${playerScore}<br><span style="font-size:12px;opacity:0.8">${player.sizePercent.toFixed(2)}%</span>` : '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+      const aiStatus = ai.active ? `${aiScore}<br><span style="font-size:12px;opacity:0.8">${ai.sizePercent.toFixed(2)}%</span>` : '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+      playerScoreElement.innerHTML = playerStatus;
+      aiScoreElement.innerHTML = aiStatus;
+      playerScoreElement.style.transform = 'scale(1.1)';
+      aiScoreElement.style.transform = 'scale(1.1)';
+      setTimeout(() => { playerScoreElement.style.transform = 'scale(1)'; aiScoreElement.style.transform = 'scale(1)'; }, 150);
+    }
+
+    // =====================================================
+    // КОЛЛИЗИЯ С ПЛАТФОРМОЙ (овальной)
+    // =====================================================
+    function collisionWithOval(ball, platform) {
+      if (!platform.active) return false;
+      const prevX = ball.x - (ball.dx + ball.spin * GameSettings.PHYSICS.SPIN_INFLUENCE_MOVE) * ball.speedMult;
+      const prevY = ball.y - ball.dy * ball.speedMult;
+      const steps = 5;
+      let collisionData = null;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const checkX = prevX + (ball.x - prevX) * t;
+        const checkY = prevY + (ball.y - prevY) * t;
+        const inRect = checkX + ball.radius > platform.x - 2 && checkX - ball.radius < platform.x + platform.width + 2 && checkY + ball.radius > platform.y - 2 && checkY - ball.radius < platform.y + platform.height + 2;
+        if (inRect) {
+          const relativeX = (checkX - platform.x) / platform.width;
+          const curveFactor = Math.sin(relativeX * Math.PI);
+          const curveY = platform.y + platform.curveHeight * (1 - Math.abs(curveFactor));
+          const verticalCollision = Math.abs(checkY - curveY) < ball.radius + 2;
+          const ballDy = ball.dy * ball.speedMult;
+          const isApproaching = (ballDy > 0 && checkY < curveY) || (ballDy < 0 && checkY > curveY);
+          if (verticalCollision && isApproaching) {
+            collisionData = { hit: true, slope: Math.cos(relativeX * Math.PI), curveY: curveY, pointX: checkX, pointY: checkY };
+            break;
+          }
+        }
+      }
+      return collisionData;
+    }
+
+    // =====================================================
+    // ЭНЕРГЕТИЧЕСКОЕ ПОЛЕ
+    // =====================================================
+    function applyForceField(ball, platform, isPlayerPlatform) {
+      if (!GameSettings.FORCE_FIELD.ENABLED) return false;
+      if (!platform.active) return false;
+      const platformCenterX = platform.x + platform.width / 2;
+      const platformCenterY = platform.y + platform.height / 2;
+      const dx = ball.x - platformCenterX;
+      const dy = ball.y - platformCenterY;
+      const distance = Math.hypot(dx, dy);
+      if (distance > GameSettings.FORCE_FIELD.RADIUS) return false;
+      const t = Math.max(0, Math.min(1, distance / GameSettings.FORCE_FIELD.RADIUS));
+      let forceStrength = GameSettings.FORCE_FIELD.MAX_FORCE * Math.pow(1 - t, GameSettings.FORCE_FIELD.FALLOFF);
+      forceStrength = Math.max(GameSettings.FORCE_FIELD.MIN_FORCE, forceStrength);
+      let dirX = dx, dirY = dy;
+      if (distance > 0.01) { dirX /= distance; dirY /= distance; }
+      else { dirX = 0; dirY = (ball.y < platformCenterY) ? -1 : 1; }
+      ball.dx += dirX * forceStrength;
+      ball.dy += dirY * forceStrength;
+      if (frameCounter - ball.lastFieldForceFrame > 3 && forceStrength > 0.2) {
+        ball.lastFieldForceFrame = frameCounter;
+        const effectColor = isPlayerPlatform ? GameSettings.FORCE_FIELD.ENERGY_COLOR.PLAYER : GameSettings.FORCE_FIELD.ENERGY_COLOR.AI;
+        for (let i = 0; i < 5 + Math.floor(forceStrength * 8); i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const offset = ball.radius + Math.random() * 20;
+          fieldParticles.push({ x: ball.x + Math.cos(angle) * offset, y: ball.y + Math.sin(angle) * offset, vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3, radius: 1 + Math.random() * 3, color: effectColor, life: 0.5 + Math.random() * 0.5, fadeSpeed: 0.02 + Math.random() * 0.03 });
+        }
+      }
+      return true;
+    }
+
+    function drawForceField(platform, color, pulse) {
+      if (!GameSettings.FORCE_FIELD.ENABLED) return;
+      if (!platform.active) return;
+      const centerX = platform.x + platform.width / 2;
+      const centerY = platform.y + platform.height / 2;
+      const radius = GameSettings.FORCE_FIELD.RADIUS;
+      const pulseIntensity = 0.8 + Math.sin(pulse) * 0.2;
+      const currentRadius = radius * pulseIntensity;
+      const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.2, centerX, centerY, currentRadius);
+      const alpha = GameSettings.FORCE_FIELD.VISUAL_INTENSITY * 0.3 * pulseIntensity;
+      gradient.addColorStop(0, `${color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`);
+      gradient.addColorStop(0.4, `${color}${Math.floor(alpha * 0.5 * 255).toString(16).padStart(2, '0')}`);
+      gradient.addColorStop(0.7, `${color}${Math.floor(alpha * 0.2 * 255).toString(16).padStart(2, '0')}`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.15 * pulseIntensity;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2 + pulse * 2;
+        const x1 = centerX + Math.cos(angle) * radius * 0.3;
+        const y1 = centerY + Math.sin(angle) * radius * 0.3;
+        const x2 = centerX + Math.cos(angle + 0.2) * currentRadius;
+        const y2 = centerY + Math.sin(angle + 0.2) * currentRadius;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, currentRadius * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // =====================================================
+    // AI КОНТРОЛЛЕР
+    // =====================================================
+    class SmartController {
+      constructor(platform, isTop) {
+        this.platform = platform;
+        this.isTop = isTop;
+        this.tactic = 'defend';
+        this.aggression = 0.7;
+        this.skillLevel = 0.8;
+        this.lastDecisionFrame = 0;
+      }
+      analyze(ball, opponentPlatform, canvas) {
+        const distToGoal = this.isTop ? ball.y : canvas.height - ball.y;
+        const opponentCenter = opponentPlatform.x + opponentPlatform.width / 2;
+        const ballCenter = ball.x;
+        const opponentOffset = Math.abs(opponentCenter - ballCenter);
+        const leftCornerFree = opponentPlatform.x < 80;
+        const rightCornerFree = opponentPlatform.x + opponentPlatform.width > canvas.width - 80;
+        const canUseBank = ball.x < 100 || ball.x > canvas.width - 100;
+        const canUseSpin = Math.abs(ball.dx) < 4;
+        return { isAttacking: distToGoal < 150 && ((this.isTop && ball.dy < 0) || (!this.isTop && ball.dy > 0)), opponentIsCentered: opponentOffset < opponentPlatform.width / 3, cornersAreFree: leftCornerFree || rightCornerFree, canUseBank: canUseBank, canUseSpin: canUseSpin, distToGoal: distToGoal };
+      }
+      selectTactic(situation) {
+        const r = Math.random();
+        if (situation.isAttacking && this.aggression > 0.4) {
+          if (situation.canUseBank && r < 0.35) return 'bank';
+          if (situation.canUseSpin && r < 0.3) return 'spin';
+          if (situation.cornersAreFree && r < 0.5) return 'corner';
+          return 'attack';
+        }
+        if (this.skillLevel > 0.6 && r < 0.25) {
+          if (situation.canUseBank) return 'bank';
+          if (situation.canUseSpin) return 'spin';
+          if (situation.opponentIsCentered) return 'fake';
+        }
+        return 'defend';
+      }
+      calculateTarget(ball, opponentPlatform, canvas) {
+        const target = { x: ball.x, y: this.platform.y, spin: 0, power: 1.0 };
+        switch (this.tactic) {
+          case 'attack': case 'corner':
+            const opponentCenter = opponentPlatform.x + opponentPlatform.width / 2;
+            const targetX = opponentCenter < canvas.width / 2 ? canvas.width - 70 : 70;
+            target.x = targetX; target.power = 1.2; break;
+          case 'bank':
+            const wallX = ball.x < canvas.width / 2 ? 25 : canvas.width - 25;
+            target.x = wallX; target.power = 0.9; break;
+          case 'spin':
+            const opponentCenterSpin = opponentPlatform.x + opponentPlatform.width / 2;
+            const spinDir = ball.x < opponentCenterSpin ? 1 : -1;
+            target.x = opponentCenterSpin + (spinDir * 55);
+            target.spin = spinDir * 5 + (Math.random() - 0.5) * 2; target.power = 0.85; break;
+          case 'fake':
+            const wallXfake = ball.x < canvas.width / 2 ? 30 : canvas.width - 30;
+            target.x = wallXfake;
+            target.spin = (ball.x < canvas.width / 2 ? 4 : -4); target.power = 0.8; break;
+          default: target.x = ball.x; target.power = 0.95;
+        }
+        target.x = Math.max(20, Math.min(canvas.width - this.platform.width - 20, target.x));
+        return target;
+      }
+      update(ball, opponentPlatform, canvas, frameCounter) {
+        if (!this.platform.active) return;
+        const situation = this.analyze(ball, opponentPlatform, canvas);
+        if (frameCounter - this.lastDecisionFrame > 30) { this.tactic = this.selectTactic(situation); this.lastDecisionFrame = frameCounter; }
+        const target = this.calculateTarget(ball, opponentPlatform, canvas);
+        const dx = target.x - this.platform.x;
+        const dy = target.y - this.platform.y;
+        const distance = Math.hypot(dx, dy);
+        let followStrength = 0.18 + distance * 0.0008;
+        followStrength = Math.min(0.32, followStrength);
+        this.platform.vx += dx * followStrength;
+        this.platform.vy += dy * followStrength;
+        const speed = Math.hypot(this.platform.vx, this.platform.vy);
+        if (speed > GameSettings.PLATFORM_MAX_SPEED) { this.platform.vx = this.platform.vx / speed * GameSettings.PLATFORM_MAX_SPEED; this.platform.vy = this.platform.vy / speed * GameSettings.PLATFORM_MAX_SPEED; }
+        this.platform.vx *= GameSettings.PLATFORM_INERTIA;
+        this.platform.vy *= GameSettings.PLATFORM_INERTIA;
+        this.platform.x += this.platform.vx;
+        this.platform.y += this.platform.vy;
+        this.platform.x = Math.max(0, Math.min(canvas.width - this.platform.width, this.platform.x));
+        if (!this.isTop) {
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height - this.platform.height;
+          this.platform.y = Math.max(zoneTop, Math.min(zoneBottom, this.platform.y));
+        } else {
+          const zoneTop = 0;
+          const zoneBottom = canvas.height * GameSettings.ZONE_HEIGHT_RATIO - this.platform.height;
+          this.platform.y = Math.max(zoneTop, Math.min(zoneBottom, this.platform.y));
+        }
+        const distToBall = Math.abs(ball.y - this.platform.y);
+        const isInReach = distToBall < this.platform.height + ball.radius + 15;
+        const isMovingRightDirection = (this.isTop && ball.dy < 0) || (!this.isTop && ball.dy > 0);
+        if (isInReach && isMovingRightDirection && target.power !== 1.0) ball.speedMult = target.power;
+        if (isInReach && isMovingRightDirection && target.spin !== 0) ball.spin += target.spin * 0.5;
+      }
+    }
+
+    let smartPlayer = new SmartController(player, false);
+
+    function updateAI() {
+      if (!ai.active || !gameActive) return;
+      const framesToPredict = 3;
+      if (ball.dy < 0) {
+        const predictedX = ball.x + ball.dx * framesToPredict;
+        const targetX = predictedX - ai.width / 2 + (Math.random() - 0.5) * ai.errorMargin;
+        ai.x += (targetX - ai.x) * ai.reactionTime;
+      } else {
+        const targetX = ball.x - ai.width / 2 + (Math.random() - 0.5) * ai.errorMargin;
+        ai.x += (targetX - ai.x) * ai.reactionTime * 0.7;
+      }
+      ai.x = clamp(ai.x, 0, canvas.width - ai.width);
+      const aiZoneHeight = canvas.height * GameSettings.ZONE_HEIGHT_RATIO;
+      let aiT = ball.y / aiZoneHeight;
+      aiT = Math.max(0, Math.min(1, aiT));
+      const targetY = ai.maxY + (ai.minY - ai.maxY) * aiT;
+      ai.y += (targetY - ai.y) * 0.08;
+    }
+
+    // =====================================================
+    // ОСНОВНАЯ ЛОГИКА ОБНОВЛЕНИЯ МЯЧА
+    // =====================================================
+    function updateBall() {
+      if (!ball.active || !gameActive) return;
+      limitBallSpeed();
+      const totalDx = (ball.dx + ball.spin * GameSettings.PHYSICS.SPIN_INFLUENCE_MOVE) * ball.speedMult;
+      const totalDy = ball.dy * ball.speedMult;
+      const stepDx = totalDx / GameSettings.BALL_SUBSTEPS;
+      const stepDy = totalDy / GameSettings.BALL_SUBSTEPS;
+      let collisionHappened = false;
+
+      for (let step = 0; step < GameSettings.BALL_SUBSTEPS; step++) {
+        ball.x += stepDx;
+        ball.y += stepDy;
+        let wallHit = false;
+
+        // Стены
+        if (ball.x - ball.radius <= 0) { ball.x = ball.radius; const r = calculateSpinRebound(ball, null, true); ball.dx = Math.abs(r.dx); ball.dy = r.dy; ball.spin = r.spin; wallHit = true; }
+        else if (ball.x + ball.radius >= canvas.width) { ball.x = canvas.width - ball.radius; const r = calculateSpinRebound(ball, null, true); ball.dx = -Math.abs(r.dx); ball.dy = r.dy; ball.spin = r.spin; wallHit = true; }
+
+        // Нижняя граница (ворота игрока)
+        if (ball.y + ball.radius >= canvas.height) {
+          const goalWidth = canvas.width;
+          const openingSize = (player.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            aiScore++;
+            decreasePlatform(player, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            updateScoreDisplay();
+            for (let i = 0; i < 20; i++) { sparks.push({ x: Math.random() * canvas.width, y: canvas.height - 5, vx: (Math.random() - 0.5) * 5, vy: -Math.random() * 5 - 2, radius: 2 + Math.random() * 3, color: '#00ffff', life: 0.8, fadeSpeed: 0.02 }); }
+            ball.y = canvas.height - ball.radius;
+            ball.dy = -Math.abs(ball.dy);
+          } else {
+            player.goal.openingPercent = Math.min(player.goal.openingPercent + GameSettings.GOAL_CONFIG.HIT_OPEN_INCREMENT, GameSettings.GOAL_CONFIG.MAX_OPENING);
+            ball.y = canvas.height - ball.radius;
+            const r = calculateSpinRebound(ball, null, true);
+            ball.dx = r.dx; ball.dy = -Math.abs(r.dy); ball.spin = r.spin;
+            createSparks(ball.x, canvas.height - 10, '#ffffff', 8, 0.8);
+            wallHit = true;
+          }
+        }
+
+        // Верхняя граница (ворота AI)
+        if (ball.y - ball.radius <= 0) {
+          const goalWidth = canvas.width;
+          const openingSize = (ai.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            playerScore++;
+            decreasePlatform(ai, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            updateScoreDisplay();
+            for (let i = 0; i < 20; i++) { sparks.push({ x: Math.random() * canvas.width, y: 5, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 5 + 2, radius: 2 + Math.random() * 3, color: '#ff00ff', life: 0.8, fadeSpeed: 0.02 }); }
+            ball.y = ball.radius;
+            ball.dy = Math.abs(ball.dy);
+          } else {
+            ai.goal.openingPercent = Math.min(ai.goal.openingPercent + GameSettings.GOAL_CONFIG.HIT_OPEN_INCREMENT, GameSettings.GOAL_CONFIG.MAX_OPENING);
+            ball.y = ball.radius;
+            const r = calculateSpinRebound(ball, null, true);
+            ball.dx = r.dx; ball.dy = Math.abs(r.dy); ball.spin = r.spin;
+            createSparks(ball.x, 10, '#ffffff', 8, 0.8);
+            wallHit = true;
+          }
+        }
+
+        // Энергетическое поле (применяется до коллизий)
+        applyForceField(ball, player, true);
+        applyForceField(ball, ai, false);
+
+        // Коллизия с игроком
+        const playerCollision = collisionWithOval(ball, player);
+        if (playerCollision && !collisionHappened) {
+          collisionHappened = true;
+          if (ball.dy > 0) ball.y = playerCollision.curveY - ball.radius - 1;
+          else ball.y = playerCollision.curveY + ball.radius + 1;
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#0096ff', 4);
+            createSparks(ball.x, ball.y, '#0096ff', 8, 0.8);
+            createSparks(ball.x, ball.y, '#ffffff', 6, 0.6);
+          }
+          const result = calculateSpinRebound(ball, player, false);
+          ball.dx = result.dx; ball.dy = result.dy; ball.spin = result.spin;
+          ball.dx += -playerCollision.slope * GameSettings.PHYSICS.REBOUND_POWER;
+          ball.dx += player.vx * GameSettings.PHYSICS.PLATFORM_TRANSFER_X;
+          ball.dy += player.vy * GameSettings.PHYSICS.PLATFORM_TRANSFER_Y;
+          decreasePlatform(player, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          player.hits++;
+          player.goal.openingPercent = Math.max(player.goal.openingPercent - GameSettings.GOAL_CONFIG.BLOCK_RECOVERY, 0);
+          updateScoreDisplay();
+          break;
+        }
+
+        // Коллизия с AI
+        const aiCollision = collisionWithOval(ball, ai);
+        if (aiCollision && !collisionHappened) {
+          collisionHappened = true;
+          if (ball.dy > 0) ball.y = aiCollision.curveY - ball.radius - 1;
+          else ball.y = aiCollision.curveY + ball.radius + 1;
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#ff00ff', 4);
+            createSparks(ball.x, ball.y, '#ff00ff', 8, 0.8);
+            createSparks(ball.x, ball.y, '#ffffff', 6, 0.6);
+          }
+          const result = calculateSpinRebound(ball, ai, false);
+          ball.dx = result.dx; ball.dy = result.dy; ball.spin = result.spin;
+          ball.dx += -aiCollision.slope * GameSettings.PHYSICS.REBOUND_POWER;
+          ball.dx += ai.vx * GameSettings.PHYSICS.PLATFORM_TRANSFER_X;
+          ball.dy += ai.vy * GameSettings.PHYSICS.PLATFORM_TRANSFER_Y;
+          decreasePlatform(ai, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          ai.hits++;
+          ai.goal.openingPercent = Math.max(ai.goal.openingPercent - GameSettings.GOAL_CONFIG.BLOCK_RECOVERY, 0);
+          updateScoreDisplay();
+          break;
+        }
+
+        if (wallHit) {
+          const spinFactor = Math.min(1.5, Math.abs(ball.spin) / 15);
+          createSparks(ball.x, ball.y, '#ffffff', 8 + Math.floor(spinFactor * 4), 0.8 + spinFactor * 0.3);
+        }
+      }
+
+      ball.trail.unshift({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 8) ball.trail.pop();
+      createFlightSparks();
+      applyAirDrag();
+      if (ball.effect === 'heavy') { ball.speedMult = 0.7; ball.color = '#ff9900'; }
+      else if (ball.effect === 'light') { ball.speedMult = 1.5; ball.color = '#00ffff'; }
+      else if (ball.effect === 'split') { ball.color = '#ff00ff'; }
+      if (Math.abs(ball.spin) > 1.5 && Math.random() < 0.4) {
+        const spinStrength = Math.min(2.0, Math.abs(ball.spin) / 8);
+        createSpinSparks(ball.x, ball.y, ball.spin, 3 + Math.floor(spinStrength * 6));
+      }
+      ball.spin *= GameSettings.PHYSICS.SPIN_DECAY_FLIGHT;
+      if (Math.abs(ball.spin) < 0.1) ball.spin = 0;
+    }
+
+    // =====================================================
+    // ОБРАБОТЧИКИ КАСАНИЙ
+    // =====================================================
+    function handleTouchStart(y) {
+      if (y > canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO)) {
+        touchActive = true;
+        controlMode = 'PLAYER';
+        lastTouchX = 0; lastTouchY = 0;
+      }
+    }
+    function handleTouchMove(x, y) {
+      if (!touchActive) return;
+      lastTouchX = x; lastTouchY = y;
+      let targetX = x - player.width / 2;
+      targetX = clamp(targetX, 0, canvas.width - player.width);
+      const platformOffset = 60;
+      let targetY = y - platformOffset;
+      const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+      const zoneBottom = canvas.height;
+      targetY = clamp(targetY, zoneTop, zoneBottom - player.height);
+      player.targetX = targetX;
+      player.targetY = targetY;
+    }
+    canvas.addEventListener('touchstart', e => { handleTouchStart(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchmove', e => { handleTouchMove(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+    canvas.addEventListener('touchend', () => { touchActive = false; });
+    canvas.addEventListener('mousedown', e => handleTouchStart(e.clientY));
+    canvas.addEventListener('mousemove', e => handleTouchMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', () => { touchActive = false; });
+
+    // =====================================================
+    // ГЛАВНЫЙ ЦИКЛ ОБНОВЛЕНИЯ
+    // =====================================================
+    function update() {
+      if (!gameActive) return;
+      if (player.active) {
+        if (controlMode === 'AI') {
+          smartPlayer.update(ball, ai, canvas, frameCounter);
+        } else if (touchActive) {
+          const dx = player.targetX - player.x;
+          const dy = player.targetY - player.y;
+          const distance = Math.hypot(dx, dy);
+          let followStrength = GameSettings.PLATFORM_FOLLOW_BASE + distance * GameSettings.PLATFORM_FOLLOW_FACTOR;
+          followStrength = Math.min(GameSettings.MAX_FOLLOW_STRENGTH, followStrength);
+          player.vx += dx * followStrength;
+          player.vy += dy * followStrength;
+          limitPlatformSpeed(player);
+          applyPlatformInertia(player);
+          player.x += player.vx;
+          player.y += player.vy;
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height;
+          player.y = clamp(player.y, zoneTop, zoneBottom - player.height);
+        } else {
+          applyPlatformInertia(player);
+          player.x += player.vx;
+          player.y += player.vy;
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height;
+          player.y = clamp(player.y, zoneTop, zoneBottom - player.height);
+        }
+      }
+      updateAI();
+      player.vx = player.x - lastPlayerX;
+      player.vy = player.y - lastPlayerY;
+      ai.vx = ai.x - lastAiX;
+      ai.vy = ai.y - lastAiY;
+      updateBall();
+      lastPlayerX = player.x;
+      lastPlayerY = player.y;
+      lastAiX = ai.x;
+      lastAiY = ai.y;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].x += particles[i].vx;
+        particles[i].y += particles[i].vy;
+        particles[i].life -= 0.02;
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const spark = sparks[i];
+        spark.x += spark.vx;
+        spark.y += spark.vy;
+        spark.vx *= 0.95;
+        spark.vy *= 0.95;
+        spark.life -= spark.fadeSpeed;
+        if (spark.life <= 0) sparks.splice(i, 1);
+      }
+      for (let i = fieldParticles.length - 1; i >= 0; i--) {
+        const p = fieldParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.fadeSpeed;
+        if (p.life <= 0) fieldParticles.splice(i, 1);
+      }
+    }
+
+    // =====================================================
+    // ОТРИСОВКА
+    // =====================================================
+    function drawSparks() {
+      sparks.forEach(spark => {
+        ctx.globalAlpha = spark.life * 0.7;
+        ctx.shadowColor = spark.color;
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = spark.color;
+        ctx.beginPath();
+        ctx.arc(spark.x, spark.y, spark.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBall() {
+      ball.trail.forEach((pos, i) => {
+        const alpha = 0.3 - (i / ball.trail.length) * 0.3;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, ball.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      const spinStrength = Math.min(1, Math.abs(ball.spin) / 50);
+      const spinDirection = Math.sign(ball.spin);
+      ctx.save();
+      ctx.fillStyle = ball.color;
+      ctx.shadowColor = ball.color;
+      ctx.globalAlpha = 0.6 + spinStrength * 0.3;
+      const baseGlowRadius = ball.radius * (1.2 + spinStrength * 0.8);
+      const offsetX = spinDirection * ball.radius * spinStrength * 0.3;
+      ctx.shadowBlur = 25 + spinStrength * 25;
+      ctx.beginPath();
+      ctx.arc(ball.x + offsetX, ball.y, baseGlowRadius, 0, Math.PI * 2);
+      ctx.fill();
+      if (spinStrength > 0.3) {
+        ctx.globalAlpha = 0.3 + spinStrength * 0.3;
+        ctx.shadowBlur = 20 + spinStrength * 20;
+        ctx.beginPath();
+        ctx.arc(ball.x + offsetX * 1.5, ball.y, baseGlowRadius * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.shadowColor = ball.color;
+      ctx.shadowBlur = 25;
+      ctx.fillStyle = ball.color;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ball.x - ball.radius * 0.3, ball.y - ball.radius * 0.3, ball.radius * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      if (Math.abs(ball.spin) > 1.0) {
+        const spinStrength = Math.min(1, Math.abs(ball.spin) / 15);
+        const spinDirection = Math.sign(ball.spin);
+        for (let i = 0; i < 3 + Math.floor(spinStrength * 5); i++) {
+          const baseAngle = (i / 3) * Math.PI * 2;
+          const sparkAngle = baseAngle + (spinDirection * (Math.PI / 2));
+          const distance = ball.radius * 1.2;
+          const sparkX = ball.x + Math.cos(sparkAngle) * distance;
+          const sparkY = ball.y + Math.sin(sparkAngle) * distance;
+          ctx.save();
+          ctx.globalAlpha = 0.6 * spinStrength;
+          ctx.shadowColor = ball.color;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = ball.color;
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1 + spinStrength * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    function drawOvalPlatform(x, y, width, height, curveHeight, color) {
+      if (width <= 0 || height <= 0) return;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y + height / 2);
+      ctx.bezierCurveTo(x, y, x + width, y, x + width, y + height / 2);
+      ctx.bezierCurveTo(x + width, y + height, x, y + height, x, y + height / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawGoalIndicators() {
+      if (player.active) {
+        const goalWidth = canvas.width;
+        const openingSize = (player.goal.openingPercent / 100) * goalWidth;
+        const activeLeft = (goalWidth - openingSize) / 2;
+        const activeRight = activeLeft + openingSize;
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(0, canvas.height - 4, activeLeft, 4);
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(activeLeft, canvas.height - 4, openingSize, 4);
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(activeRight, canvas.height - 4, canvas.width - activeRight, 4);
+      }
+      if (ai.active) {
+        const goalWidth = canvas.width;
+        const openingSize = (ai.goal.openingPercent / 100) * goalWidth;
+        const activeLeft = (goalWidth - openingSize) / 2;
+        const activeRight = activeLeft + openingSize;
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, activeLeft, 4);
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(activeLeft, 0, openingSize, 4);
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(activeRight, 0, canvas.width - activeRight, 4);
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      player.fieldPulse = (player.fieldPulse + GameSettings.FORCE_FIELD.PULSE_SPEED) % (Math.PI * 2);
+      ai.fieldPulse = (ai.fieldPulse + GameSettings.FORCE_FIELD.PULSE_SPEED) % (Math.PI * 2);
+      if (GameSettings.FORCE_FIELD.ENABLED) {
+        drawForceField(player, GameSettings.FORCE_FIELD.ENERGY_COLOR.PLAYER, player.fieldPulse);
+        drawForceField(ai, GameSettings.FORCE_FIELD.ENERGY_COLOR.AI, ai.fieldPulse);
+      }
+      if (player.active) drawOvalPlatform(player.x, player.y, player.width, player.height, player.curveHeight, '#0096ff');
+      if (ai.active) drawOvalPlatform(ai.x, ai.y, ai.width, ai.height, ai.curveHeight, '#ff00ff');
+      drawSparks();
+      drawBall();
+      drawGoalIndicators();
+      fieldParticles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function gameLoop() {
+      frameCounter++;
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    updateScoreDisplay();
+    gameLoop();
+  </script>
+</body>
+
+</html>
