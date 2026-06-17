@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Neon Pong — Силовые платформы</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas { display: block; }
+    .glow-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+    .fog {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    .fog-top { background: linear-gradient(to bottom, rgba(255,0,255,0.15) 0%, rgba(255,0,255,0.12) 5%, rgba(255,0,255,0.09) 15%, rgba(255,0,255,0.06) 30%, rgba(255,0,255,0.03) 50%, rgba(255,0,255,0.01) 75%, transparent 100%); }
+    .fog-bottom { background: linear-gradient(to top, rgba(0,150,255,0.15) 0%, rgba(0,150,255,0.12) 5%, rgba(0,150,255,0.09) 15%, rgba(0,150,255,0.06) 30%, rgba(0,150,255,0.03) 50%, rgba(0,150,255,0.01) 75%, transparent 100%); }
+    .fog-left { background: linear-gradient(to right, rgba(255,0,255,0.08) 0%, rgba(255,0,255,0.06) 10%, rgba(255,0,255,0.04) 20%, rgba(255,0,255,0.03) 35%, rgba(255,0,255,0.02) 50%, rgba(0,150,255,0.02) 50%, rgba(0,150,255,0.03) 65%, rgba(0,150,255,0.04) 80%, rgba(0,150,255,0.06) 90%, rgba(0,150,255,0.08) 100%); }
+    .fog-right { background: linear-gradient(to left, rgba(255,0,255,0.08) 0%, rgba(255,0,255,0.06) 10%, rgba(255,0,255,0.04) 20%, rgba(255,0,255,0.03) 35%, rgba(255,0,255,0.02) 50%, rgba(0,150,255,0.02) 50%, rgba(0,150,255,0.03) 65%, rgba(0,150,255,0.04) 80%, rgba(0,150,255,0.06) 90%, rgba(0,150,255,0.08) 100%); }
+    #score-display {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Courier New', monospace;
+      font-size: 24px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 10px #ffffff;
+      z-index: 100;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      box-shadow: 0 0 20px rgba(255,255,255,0.1);
+    }
+    .player-score { color: #0096ff; text-shadow: 0 0 15px #0096ff; }
+    .ai-score { color: #ff00ff; text-shadow: 0 0 15px #ff00ff; }
+    .score-separator { color: #ffffff; margin: 0 15px; }
+    #victory-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1;
+    }
+    .victory-message {
+      font-family: 'Courier New', monospace;
+      font-size: 48px;
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 0 0 20px currentColor;
+      animation: pulse 0.5s infinite;
+    }
+    .victory-player { color: #0096ff; }
+    .victory-ai { color: #ff00ff; }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.9; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="game"></canvas>
+  <div class="glow-container">
+    <div class="fog fog-top"></div>
+    <div class="fog fog-bottom"></div>
+    <div class="fog fog-left"></div>
+    <div class="fog fog-right"></div>
+  </div>
+  <div id="score-display">
+    <span class="player-score" id="player-score">0</span>
+    <span class="score-separator">:</span>
+    <span class="ai-score" id="ai-score">0</span>
+  </div>
+  <div id="victory-screen">
+    <div class="victory-message" id="victory-message"></div>
+  </div>
+
+  <script>
+    // =====================================================
+    // НАСТРОЙКИ ИГРЫ
+    // =====================================================
+    const GameSettings = {
+      ZONE_HEIGHT_RATIO: 0.5,
+
+      SIZE_CONFIG: {
+        HIT_DECREASE: 1,
+        GOAL_DECREASE: 5,
+        MIN_SIZE: 20,
+        MAX_SIZE: 300
+      },
+
+      DRAG_CONFIG: {
+        ENABLED: true,
+        DECELERATION: 0.997
+      },
+
+      GOAL_CONFIG: {
+        INITIAL_OPENING: 0,
+        HIT_OPEN_INCREMENT: 5,
+        BLOCK_RECOVERY: 2,
+        MAX_OPENING: 100,
+        WALL_COLOR_INACTIVE: '#333333',
+      },
+
+      // Внешнее поле ТОЛЬКО для детекции (без физики)
+      PROXIMITY_FIELD: {
+        ENABLED: true,
+        RADIUS: 90,
+        INTENSITY: 0.4
+      },
+
+      // Силовое ядро (активное отталкивание)
+      CORE_FIELD: {
+        RADIUS: 32,
+        PUSH_FORCE: 1.0,
+        STABILIZE_FORCE: 0.25,
+        ENERGY_COLOR: { PLAYER: '#0096ff', AI: '#ff00ff' },
+        PULSE_SPEED: 0.015,
+        CORE_GLOW: 0.7
+      },
+
+      BALL_MAX_SPEED: 12,
+      PLATFORM_MAX_SPEED: 12,
+      PLATFORM_INERTIA: 0.96,
+      PLATFORM_FOLLOW_BASE: 0.18,
+      PLATFORM_FOLLOW_FACTOR: 0.0008,
+      MAX_FOLLOW_STRENGTH: 0.3,
+      BALL_SUBSTEPS: 6,
+      COLLISION_EFFECT_COOLDOWN: 3,
+      
+      ANTI_STICK: {
+        ENABLED: true,
+        MIN_DISTANCE: 10,
+        PUSH_FORCE: 1.8
+      },
+      
+      SPIN_DECAY_FLIGHT: 0.98
+    };
+
+    // =====================================================
+    // ЭЛЕМЕНТЫ СТРАНИЦЫ
+    // =====================================================
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const playerScoreElement = document.getElementById('player-score');
+    const aiScoreElement = document.getElementById('ai-score');
+    const victoryScreen = document.getElementById('victory-screen');
+    const victoryMessage = document.getElementById('victory-message');
+
+    // =====================================================
+    // ПЕРЕМЕННЫЕ
+    // =====================================================
+    let frameCounter = 0;
+    let controlMode = 'AI';
+    let touchActive = false;
+    let gameActive = true;
+    
+    const particles = [];
+    const sparks = [];
+    const fieldParticles = [];
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // =====================================================
+    // ИНИЦИАЛИЗАЦИЯ ОБЪЕКТОВ
+    // =====================================================
+    let player = {
+      x: canvas.width / 2 - 50,
+      y: canvas.height - 70,
+      width: 100,
+      height: 12,
+      minY: canvas.height - (canvas.height * 0.5),
+      maxY: canvas.height - 30,
+      originalWidth: 100,
+      originalHeight: 12,
+      hits: 0,
+      sizePercent: 100,
+      active: true,
+      curveHeight: 6,
+      vx: 0, vy: 0,
+      targetX: canvas.width / 2 - 50,
+      targetY: canvas.height - 70,
+      goal: { openingPercent: 0 },
+      fieldPulse: 0,
+      isPreparing: false
+    };
+
+    let ai = {
+      x: canvas.width / 2 - 50,
+      y: 70,
+      width: 100,
+      height: 12,
+      minY: canvas.height * 0.5,
+      maxY: 30,
+      reactionTime: 0.09,
+      errorMargin: 12,
+      originalWidth: 100,
+      originalHeight: 12,
+      hits: 0,
+      sizePercent: 100,
+      active: true,
+      curveHeight: 6,
+      vx: 0, vy: 0,
+      goal: { openingPercent: 0 },
+      fieldPulse: 0,
+      isPreparing: false
+    };
+
+    let ball = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 7,
+      dx: 4.5 * (Math.random() > 0.5 ? 1 : -1),
+      dy: -4.5,
+      spin: 0,
+      active: true,
+      color: '#ffffff',
+      trail: [],
+      lastEffectFrame: 0,
+      stuckFrames: 0
+    };
+
+    let playerScore = 0;
+    let aiScore = 0;
+    let lastPlayerX = player.x, lastPlayerY = player.y;
+    let lastAiX = ai.x, lastAiY = ai.y;
+
+    // =====================================================
+    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+    // =====================================================
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function createParticle(x, y, color, count = 5) {
+      for (let i = 0; i < count; i++) {
+        particles.push({ 
+          x, y, 
+          vx: (Math.random() - 0.5) * 6, 
+          vy: (Math.random() - 0.5) * 6, 
+          radius: 2, 
+          color, 
+          life: 1.0 
+        });
+      }
+    }
+
+    function createSparks(x, y, color, count = 8, force = 1.0) {
+      for (let i = 0; i < count; i++) {
+        sparks.push({ 
+          x, y, 
+          vx: (Math.random() - 0.5) * 7 * force, 
+          vy: (Math.random() - 0.5) * 7 * force, 
+          radius: 1 + Math.random() * 2, 
+          color, 
+          life: 0.7 + Math.random() * 0.4, 
+          fadeSpeed: 0.025 + Math.random() * 0.03 
+        });
+      }
+    }
+
+    function applyAirDrag() {
+      if (!GameSettings.DRAG_CONFIG.ENABLED || !ball.active) return;
+      ball.dx *= GameSettings.DRAG_CONFIG.DECELERATION;
+      ball.dy *= GameSettings.DRAG_CONFIG.DECELERATION;
+    }
+
+    function limitBallSpeed() {
+      let speed = Math.hypot(ball.dx, ball.dy);
+      if (speed > GameSettings.BALL_MAX_SPEED) {
+        ball.dx = ball.dx / speed * GameSettings.BALL_MAX_SPEED;
+        ball.dy = ball.dy / speed * GameSettings.BALL_MAX_SPEED;
+      }
+      if (speed < 2.5 && speed > 0.1) {
+        let minScale = 2.5 / speed;
+        ball.dx *= minScale;
+        ball.dy *= minScale;
+      }
+    }
+
+    function decreasePlatform(platform, amount) {
+      platform.sizePercent = Math.max(GameSettings.SIZE_CONFIG.MIN_SIZE, platform.sizePercent - amount);
+      if (platform.sizePercent <= GameSettings.SIZE_CONFIG.MIN_SIZE) {
+        platform.active = false;
+        platform.width = 0;
+        for (let i = 0; i < 20; i++) {
+          createSparks(platform.x + platform.originalWidth / 2, platform.y, 
+            platform === player ? '#0096ff' : '#ff00ff', 15, 1.5);
+        }
+        checkVictory();
+        return true;
+      }
+      const oldWidth = platform.width;
+      platform.width = (platform.originalWidth * platform.sizePercent) / 100;
+      platform.height = (platform.originalHeight * platform.sizePercent) / 100;
+      platform.curveHeight = (6 * platform.sizePercent) / 100;
+      platform.x = platform.x + (oldWidth - platform.width) / 2;
+      return false;
+    }
+
+    function checkVictory() {
+      if (!player.active && ai.active) { 
+        showVictory('AI ПОБЕДИЛ!', 'victory-ai'); 
+        gameActive = false; 
+        ball.active = false; 
+      } else if (player.active && !ai.active) { 
+        showVictory('ИГРОК ПОБЕДИЛ!', 'victory-player'); 
+        gameActive = false; 
+        ball.active = false; 
+      }
+    }
+
+    function showVictory(message, className) {
+      victoryMessage.textContent = message;
+      victoryMessage.className = `victory-message ${className}`;
+      victoryScreen.style.display = 'flex';
+      setTimeout(() => resetGame(), 3000);
+    }
+
+    function resetGame() {
+      player.active = true;
+      player.sizePercent = 100;
+      player.width = player.originalWidth;
+      player.height = player.originalHeight;
+      player.curveHeight = 6;
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - 70;
+      player.vx = 0; player.vy = 0;
+      player.goal.openingPercent = 0;
+      
+      ai.active = true;
+      ai.sizePercent = 100;
+      ai.width = ai.originalWidth;
+      ai.height = ai.originalHeight;
+      ai.curveHeight = 6;
+      ai.x = canvas.width / 2 - ai.width / 2;
+      ai.y = 70;
+      ai.vx = 0; ai.vy = 0;
+      ai.goal.openingPercent = 0;
+      
+      playerScore = 0;
+      aiScore = 0;
+      
+      ball.active = false;
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      ball.dx = 4.5 * (Math.random() > 0.5 ? 1 : -1);
+      ball.dy = -4.5;
+      ball.spin = 0;
+      ball.trail = [];
+      ball.stuckFrames = 0;
+      
+      gameActive = true;
+      controlMode = 'AI';
+      updateScoreDisplay();
+      
+      setTimeout(() => { ball.active = true; }, 1000);
+    }
+
+    function updateScoreDisplay() {
+      const playerStatus = player.active ? 
+        `${playerScore}<br><span style="font-size:12px;opacity:0.8">${player.sizePercent.toFixed(0)}%</span>` : 
+        '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+      const aiStatus = ai.active ? 
+        `${aiScore}<br><span style="font-size:12px;opacity:0.8">${ai.sizePercent.toFixed(0)}%</span>` : 
+        '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+      playerScoreElement.innerHTML = playerStatus;
+      aiScoreElement.innerHTML = aiStatus;
+    }
+
+    // =====================================================
+    // ДЕТЕКЦИЯ ПРИБЛИЖЕНИЯ (только визуал)
+    // =====================================================
+    function checkProximity(ball, platform, isPlayer) {
+      if (!GameSettings.PROXIMITY_FIELD.ENABLED) return false;
+      if (!platform.active) return false;
+      
+      const centerX = platform.x + platform.width / 2;
+      const centerY = platform.y + platform.height / 2;
+      const dx = ball.x - centerX;
+      const dy = ball.y - centerY;
+      const distance = Math.hypot(dx, dy);
+      
+      return distance < GameSettings.PROXIMITY_FIELD.RADIUS;
+    }
+
+    // =====================================================
+    // СИЛОВОЕ ЯДРО (анти-залипание)
+    // =====================================================
+    function applyCoreField(ball, platform) {
+      if (!platform.active) return false;
+      
+      const centerX = platform.x + platform.width / 2;
+      const centerY = platform.y + platform.height / 2;
+      const dx = ball.x - centerX;
+      const dy = ball.y - centerY;
+      const distance = Math.hypot(dx, dy);
+      const coreRadius = GameSettings.CORE_FIELD.RADIUS;
+      
+      if (distance < coreRadius && GameSettings.ANTI_STICK.ENABLED) {
+        if (distance < GameSettings.ANTI_STICK.MIN_DISTANCE) {
+          const angle = Math.atan2(dy, dx);
+          const pushX = Math.cos(angle) * GameSettings.ANTI_STICK.PUSH_FORCE;
+          const pushY = Math.sin(angle) * GameSettings.ANTI_STICK.PUSH_FORCE;
+          ball.dx += pushX;
+          ball.dy += pushY;
+          
+          const newX = centerX + Math.cos(angle) * (coreRadius + ball.radius + 2);
+          const newY = centerY + Math.sin(angle) * (coreRadius + ball.radius + 2);
+          ball.x = newX;
+          ball.y = newY;
+          
+          createSparks(ball.x, ball.y, platform === player ? '#0096ff' : '#ff00ff', 8, 1.0);
+          return true;
+        }
+        
+        const t = 1 - (distance / coreRadius);
+        const pushStrength = GameSettings.CORE_FIELD.PUSH_FORCE * t * 0.5;
+        let dirX = dx / distance;
+        let dirY = dy / distance;
+        ball.dx += dirX * pushStrength;
+        ball.dy += dirY * pushStrength;
+        
+        const tangentX = -dirY;
+        const tangentY = dirX;
+        const tangentialVel = ball.dx * tangentX + ball.dy * tangentY;
+        const stabilizeForce = GameSettings.CORE_FIELD.STABILIZE_FORCE * t;
+        ball.dx += tangentX * tangentialVel * stabilizeForce * 0.1;
+        ball.dy += tangentY * tangentialVel * stabilizeForce * 0.1;
+        
+        return true;
+      }
+      return false;
+    }
+
+    // =====================================================
+    // КОЛЛИЗИЯ С ПЛАТФОРМОЙ
+    // =====================================================
+    function collisionWithPlatform(ball, platform) {
+      if (!platform.active) return false;
+      
+      if (ball.x + ball.radius < platform.x) return false;
+      if (ball.x - ball.radius > platform.x + platform.width) return false;
+      if (ball.y + ball.radius < platform.y) return false;
+      if (ball.y - ball.radius > platform.y + platform.height) return false;
+      
+      const closestX = clamp(ball.x, platform.x, platform.x + platform.width);
+      const closestY = clamp(ball.y, platform.y, platform.y + platform.height);
+      const dx = ball.x - closestX;
+      const dy = ball.y - closestY;
+      const distance = Math.hypot(dx, dy);
+      
+      if (distance < ball.radius) {
+        let nx = dx / distance;
+        let ny = dy / distance;
+        if (distance === 0) { nx = 0; ny = (ball.y < platform.y + platform.height/2) ? -1 : 1; }
+        
+        const overlap = ball.radius - distance;
+        ball.x += nx * overlap;
+        ball.y += ny * overlap;
+        
+        const relativeX = (closestX - platform.x) / platform.width;
+        const slopeEffect = Math.sin(relativeX * Math.PI) * 0.6;
+        
+        return { normal: { x: nx, y: ny }, slope: slopeEffect };
+      }
+      return false;
+    }
+
+    // =====================================================
+    // ОСНОВНАЯ ЛОГИКА ОБНОВЛЕНИЯ МЯЧА
+    // =====================================================
+    function updateBall() {
+      if (!ball.active || !gameActive) return;
+      
+      // Анти-залипание
+      if (GameSettings.ANTI_STICK.ENABLED) {
+        const onPlayer = (ball.y + ball.radius >= player.y && ball.y - ball.radius <= player.y + player.height &&
+                          ball.x + ball.radius >= player.x && ball.x - ball.radius <= player.x + player.width);
+        const onAi = (ball.y + ball.radius >= ai.y && ball.y - ball.radius <= ai.y + ai.height &&
+                      ball.x + ball.radius >= ai.x && ball.x - ball.radius <= ai.x + ai.width);
+        
+        if (onPlayer || onAi) {
+          ball.stuckFrames++;
+          if (ball.stuckFrames > 5) {
+            ball.dy = (ball.y < canvas.height/2) ? -6 : 6;
+            ball.dx += (Math.random() - 0.5) * 4;
+            ball.stuckFrames = 0;
+            createSparks(ball.x, ball.y, '#ffff00', 12, 1.5);
+          }
+        } else {
+          ball.stuckFrames = Math.max(0, ball.stuckFrames - 1);
+        }
+      }
+      
+      const stepDx = ball.dx / GameSettings.BALL_SUBSTEPS;
+      const stepDy = ball.dy / GameSettings.BALL_SUBSTEPS;
+      let collisionHappened = false;
+      
+      for (let step = 0; step < GameSettings.BALL_SUBSTEPS; step++) {
+        ball.x += stepDx;
+        ball.y += stepDy;
+        let wallHit = false;
+        
+        // Стены
+        if (ball.x - ball.radius <= 0) { 
+          ball.x = ball.radius; 
+          ball.dx = Math.abs(ball.dx) * 0.98; 
+          wallHit = true; 
+        }
+        else if (ball.x + ball.radius >= canvas.width) { 
+          ball.x = canvas.width - ball.radius; 
+          ball.dx = -Math.abs(ball.dx) * 0.98; 
+          wallHit = true; 
+        }
+        
+        // Ворота игрока (низ)
+        if (ball.y + ball.radius >= canvas.height) {
+          const goalWidth = canvas.width;
+          const openingSize = (player.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+          
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            aiScore++; 
+            decreasePlatform(player, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            updateScoreDisplay();
+            ball.y = canvas.height - ball.radius;
+            ball.dy = -Math.abs(ball.dy);
+            for (let i = 0; i < 15; i++) {
+              sparks.push({ x: ball.x, y: canvas.height - 10, vx: (Math.random() - 0.5) * 4, 
+                vy: -Math.random() * 4, radius: 2, color: '#00ffff', life: 0.7, fadeSpeed: 0.03 });
+            }
+          } else {
+            player.goal.openingPercent = Math.min(player.goal.openingPercent + 5, 100);
+            ball.y = canvas.height - ball.radius;
+            ball.dy = -Math.abs(ball.dy) * 0.95;
+            wallHit = true;
+          }
+        }
+        
+        // Ворота AI (верх)
+        if (ball.y - ball.radius <= 0) {
+          const goalWidth = canvas.width;
+          const openingSize = (ai.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+          
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            playerScore++; 
+            decreasePlatform(ai, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            updateScoreDisplay();
+            ball.y = ball.radius;
+            ball.dy = Math.abs(ball.dy);
+            for (let i = 0; i < 15; i++) {
+              sparks.push({ x: ball.x, y: 10, vx: (Math.random() - 0.5) * 4, 
+                vy: Math.random() * 4, radius: 2, color: '#ff00ff', life: 0.7, fadeSpeed: 0.03 });
+            }
+          } else {
+            ai.goal.openingPercent = Math.min(ai.goal.openingPercent + 5, 100);
+            ball.y = ball.radius;
+            ball.dy = Math.abs(ball.dy) * 0.95;
+            wallHit = true;
+          }
+        }
+        
+        // Детекция приближения (визуал)
+        checkProximity(ball, player, true);
+        checkProximity(ball, ai, false);
+        
+        // Силовое ядро
+        applyCoreField(ball, player);
+        applyCoreField(ball, ai);
+        
+        // Коллизия с игроком
+        const playerColl = collisionWithPlatform(ball, player);
+        if (playerColl && !collisionHappened) {
+          collisionHappened = true;
+          ball.dy = -Math.abs(ball.dy) * 0.95;
+          ball.dx += playerColl.slope * 2.5;
+          ball.dx += player.vx * 0.5;
+          
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#0096ff', 5);
+            createSparks(ball.x, ball.y, '#0096ff', 8, 0.9);
+          }
+          
+          decreasePlatform(player, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          player.hits++;
+          player.goal.openingPercent = Math.max(player.goal.openingPercent - 2, 0);
+          updateScoreDisplay();
+          break;
+        }
+        
+        // Коллизия с AI
+        const aiColl = collisionWithPlatform(ball, ai);
+        if (aiColl && !collisionHappened) {
+          collisionHappened = true;
+          ball.dy = Math.abs(ball.dy) * 0.95;
+          ball.dx += aiColl.slope * 2.5;
+          ball.dx += ai.vx * 0.5;
+          
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#ff00ff', 5);
+            createSparks(ball.x, ball.y, '#ff00ff', 8, 0.9);
+          }
+          
+          decreasePlatform(ai, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          ai.hits++;
+          ai.goal.openingPercent = Math.max(ai.goal.openingPercent - 2, 0);
+          updateScoreDisplay();
+          break;
+        }
+        
+        if (wallHit) createSparks(ball.x, ball.y, '#ffffff', 4, 0.5);
+      }
+      
+      // След мяча
+      ball.trail.unshift({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 6) ball.trail.pop();
+      
+      applyAirDrag();
+      limitBallSpeed();
+      
+      // Вращение затухает
+      ball.spin *= GameSettings.SPIN_DECAY_FLIGHT;
+      if (Math.abs(ball.spin) < 0.1) ball.spin = 0;
+    }
+
+    // =====================================================
+    // AI КОНТРОЛЛЕР
+    // =====================================================
+    class SmartController {
+      constructor(platform, isTop) {
+        this.platform = platform;
+        this.isTop = isTop;
+      }
+      
+      update(ball, canvas) {
+        if (!this.platform.active) return;
+        
+        let targetX = ball.x - this.platform.width / 2;
+        targetX = clamp(targetX, 5, canvas.width - this.platform.width - 5);
+        
+        const dx = targetX - this.platform.x;
+        this.platform.vx += dx * 0.12;
+        this.platform.vx *= GameSettings.PLATFORM_INERTIA;
+        this.platform.x += this.platform.vx;
+        this.platform.x = clamp(this.platform.x, 0, canvas.width - this.platform.width);
+        
+        // Вертикальное движение
+        const zoneHeight = canvas.height * GameSettings.ZONE_HEIGHT_RATIO;
+        let t = clamp(ball.y / zoneHeight, 0, 1);
+        if (!this.isTop) t = 1 - t;
+        const targetY = this.isTop ? 
+          70 + (canvas.height * 0.5 - 70) * t :
+          canvas.height - 70 - (canvas.height * 0.5 - 70) * t;
+        this.platform.y += (targetY - this.platform.y) * 0.06;
+        this.platform.y = clamp(this.platform.y, this.isTop ? 0 : canvas.height * 0.5, 
+                                this.isTop ? canvas.height * 0.5 - this.platform.height : canvas.height - this.platform.height);
+      }
+    }
+
+    let smartPlayer = new SmartController(player, false);
+
+    // =====================================================
+    // УПРАВЛЕНИЕ КАСАНИЯМИ
+    // =====================================================
+    function handleTouchStart(y) {
+      if (y > canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO)) {
+        touchActive = true;
+        controlMode = 'PLAYER';
+      }
+    }
+    
+    function handleTouchMove(x, y) {
+      if (!touchActive) return;
+      let targetX = x - player.width / 2;
+      targetX = clamp(targetX, 0, canvas.width - player.width);
+      let targetY = y - 50;
+      const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+      targetY = clamp(targetY, zoneTop, canvas.height - player.height);
+      player.targetX = targetX;
+      player.targetY = targetY;
+    }
+    
+    canvas.addEventListener('touchstart', e => { 
+      handleTouchStart(e.touches[0].clientY); 
+      e.preventDefault(); 
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => { 
+      handleTouchMove(e.touches[0].clientX, e.touches[0].clientY); 
+      e.preventDefault(); 
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { touchActive = false; });
+    canvas.addEventListener('mousedown', e => handleTouchStart(e.clientY));
+    canvas.addEventListener('mousemove', e => handleTouchMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', () => { touchActive = false; });
+
+    // =====================================================
+    // ОБНОВЛЕНИЕ ИГРЫ
+    // =====================================================
+    function update() {
+      if (!gameActive) return;
+      
+      // Управление игроком
+      if (player.active) {
+        if (controlMode === 'AI') {
+          smartPlayer.update(ball, canvas);
+        } else if (touchActive) {
+          const dx = player.targetX - player.x;
+          const dy = player.targetY - player.y;
+          let followStrength = GameSettings.PLATFORM_FOLLOW_BASE + Math.hypot(dx, dy) * 0.0008;
+          followStrength = Math.min(0.25, followStrength);
+          player.vx += dx * followStrength;
+          player.vy += dy * followStrength;
+          player.vx *= GameSettings.PLATFORM_INERTIA;
+          player.vy *= GameSettings.PLATFORM_INERTIA;
+          player.x += player.vx;
+          player.y += player.vy;
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          player.y = clamp(player.y, zoneTop, canvas.height - player.height);
+        } else {
+          player.vx *= GameSettings.PLATFORM_INERTIA;
+          player.vy *= GameSettings.PLATFORM_INERTIA;
+          player.x += player.vx;
+          player.y += player.vy;
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          player.y = clamp(player.y, zoneTop, canvas.height - player.height);
+        }
+      }
+      
+      // Простой AI для верхней платформы (если не используется SmartController)
+      if (ai.active && controlMode !== 'AI') {
+        let targetX = ball.x - ai.width / 2;
+        targetX = clamp(targetX, 5, canvas.width - ai.width - 5);
+        ai.x += (targetX - ai.x) * 0.1;
+        ai.x = clamp(ai.x, 0, canvas.width - ai.width);
+        const aiZone = canvas.height * GameSettings.ZONE_HEIGHT_RATIO;
+        let t = clamp(ball.y / aiZone, 0, 1);
+        ai.y += ((ai.maxY + (ai.minY - ai.maxY) * t) - ai.y) * 0.07;
+      }
+      
+      // Сохранение скоростей
+      player.vx = player.x - lastPlayerX;
+      player.vy = player.y - lastPlayerY;
+      ai.vx = ai.x - lastAiX;
+      ai.vy = ai.y - lastAiY;
+      lastPlayerX = player.x;
+      lastPlayerY = player.y;
+      lastAiX = ai.x;
+      lastAiY = ai.y;
+      
+      updateBall();
+      
+      // Обновление частиц
+      for (let i = particles.length-1; i >= 0; i--) {
+        particles[i].x += particles[i].vx;
+        particles[i].y += particles[i].vy;
+        particles[i].life -= 0.025;
+        if (particles[i].life <= 0) particles.splice(i,1);
+      }
+      for (let i = sparks.length-1; i >= 0; i--) {
+        sparks[i].x += sparks[i].vx;
+        sparks[i].y += sparks[i].vy;
+        sparks[i].vx *= 0.96;
+        sparks[i].vy *= 0.96;
+        sparks[i].life -= sparks[i].fadeSpeed;
+        if (sparks[i].life <= 0) sparks.splice(i,1);
+      }
+      for (let i = fieldParticles.length-1; i >= 0; i--) {
+        fieldParticles[i].x += fieldParticles[i].vx;
+        fieldParticles[i].y += fieldParticles[i].vy;
+        fieldParticles[i].life -= fieldParticles[i].fadeSpeed;
+        if (fieldParticles[i].life <= 0) fieldParticles.splice(i,1);
+      }
+    }
+
+    // =====================================================
+    // ОТРИСОВКА
+    // =====================================================
+    function drawProximityField(platform, color, pulse) {
+      if (!GameSettings.PROXIMITY_FIELD.ENABLED) return;
+      if (!platform.active) return;
+      
+      const centerX = platform.x + platform.width / 2;
+      const centerY = platform.y + platform.height / 2;
+      const radius = GameSettings.PROXIMITY_FIELD.RADIUS;
+      const pulseIntensity = 0.8 + Math.sin(pulse) * 0.2;
+      
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.3, centerX, centerY, radius * pulseIntensity);
+      gradient.addColorStop(0, `${color}20`);
+      gradient.addColorStop(0.5, `${color}10`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius * pulseIntensity, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    
+    function drawCoreField(platform, color, pulse) {
+      if (!platform.active) return;
+      
+      const centerX = platform.x + platform.width / 2;
+      const centerY = platform.y + platform.height / 2;
+      const radius = GameSettings.CORE_FIELD.RADIUS;
+      const pulseIntensity = 0.7 + Math.sin(pulse) * 0.3;
+      
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.2, centerX, centerY, radius * pulseIntensity);
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(0.6, `${color}80`);
+      gradient.addColorStop(1, `${color}20`);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius * pulseIntensity, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    
+    function drawOvalPlatform(x, y, width, height, curveHeight, color) {
+      if (width <= 0) return;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y + height / 2);
+      ctx.bezierCurveTo(x, y, x + width, y, x + width, y + height / 2);
+      ctx.bezierCurveTo(x + width, y + height, x, y + height, x, y + height / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      player.fieldPulse = (player.fieldPulse + GameSettings.CORE_FIELD.PULSE_SPEED) % (Math.PI * 2);
+      ai.fieldPulse = (ai.fieldPulse + GameSettings.CORE_FIELD.PULSE_SPEED) % (Math.PI * 2);
+      
+      // Внешнее поле детекции
+      drawProximityField(player, '#0096ff', player.fieldPulse);
+      drawProximityField(ai, '#ff00ff', ai.fieldPulse);
+      
+      // Силовое ядро
+      drawCoreField(player, '#0096ff', player.fieldPulse);
+      drawCoreField(ai, '#ff00ff', ai.fieldPulse);
+      
+      // Платформы
+      if (player.active) drawOvalPlatform(player.x, player.y, player.width, player.height, player.curveHeight, '#0096ff');
+      if (ai.active) drawOvalPlatform(ai.x, ai.y, ai.width, ai.height, ai.curveHeight, '#ff00ff');
+      
+      // Частицы и искры
+      sparks.forEach(s => {
+        ctx.globalAlpha = s.life * 0.8;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      fieldParticles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      // Мяч
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = ball.color;
+      ctx.fillStyle = ball.color;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      
+      // След мяча
+      ball.trail.forEach((pos, i) => {
+        ctx.globalAlpha = 0.2 - (i / ball.trail.length) * 0.2;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, ball.radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      
+      // Индикаторы ворот
+      if (player.active) {
+        let opening = (player.goal.openingPercent / 100) * canvas.width;
+        let left = (canvas.width - opening) / 2;
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(0, canvas.height - 3, left, 3);
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(left, canvas.height - 3, opening, 3);
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(left + opening, canvas.height - 3, canvas.width - left - opening, 3);
+      }
+      if (ai.active) {
+        let opening = (ai.goal.openingPercent / 100) * canvas.width;
+        let left = (canvas.width - opening) / 2;
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, left, 3);
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(left, 0, opening, 3);
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(left + opening, 0, canvas.width - left - opening, 3);
+      }
+    }
+    
+    function gameLoop() {
+      frameCounter++;
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    updateScoreDisplay();
+    gameLoop();
+  </script>
+</body>
+
+</html>

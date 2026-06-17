@@ -1,0 +1,1861 @@
+<!DOCTYPE html>
+<!-- Указывает браузеру, что документ написан в стандарте HTML5 -->
+<html>
+<!-- Начало HTML-документа, корневой элемент -->
+
+<head>
+  <!-- Блок заголовка страницы, содержит мета-информацию и подключаемые ресурсы -->
+  <meta charset="utf-8">
+  <!-- Устанавливает кодировку UTF-8, чтобы правильно отображались все символы и эмодзи -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <!-- Настройка области просмотра для мобильных устройств:
+       width=device-width — ширина равна ширине экрана,
+       initial-scale=1 — начальный масштаб 100%,
+       user-scalable=no — запрещает пользователю масштабирование (удобно для игр) -->
+  <title>Neon Pong — открывающиеся ворота</title>
+  <!-- Заголовок страницы, отображается на вкладке браузера -->
+  <style>
+    /* Начало блока CSS-стилей для оформления страницы */
+    body {
+      /* Стили для тега body (тело страницы) */
+      margin: 0;
+      /* Убираем внешние отступы по умолчанию */
+      padding: 0;
+      /* Убираем внутренние отступы по умолчанию */
+      background: #000;
+      /* Чёрный фон страницы, чтобы создать эффект неона и космоса */
+      overflow: hidden;
+      /* Скрываем всё, что выходит за пределы окна (убираем полосы прокрутки) */
+      touch-action: none;
+      /* Отключаем действия браузера по умолчанию при касании (например, прокрутку) */
+    }
+
+    canvas {
+      /* Стили для элемента canvas (холст, на котором рисуется игра) */
+      display: block;
+      /* Делаем canvas блочным элементом, убирая лишние отступы */
+    }
+
+    .glow-container {
+      /* Контейнер для эффектов свечения и тумана по краям экрана */
+      position: absolute;
+      /* Абсолютное позиционирование относительно родителя (body) */
+      top: 0;
+      /* Прижимаем к верхнему краю */
+      left: 0;
+      /* Прижимаем к левому краю */
+      width: 100%;
+      /* Ширина на весь экран */
+      height: 100%;
+      /* Высота на весь экран */
+      pointer-events: none;
+      /* Элемент не перехватывает события мыши/касаний, сквозь него можно кликать */
+      z-index: 1;
+      /* Слой выше основного контента, но ниже интерфейса */
+      overflow: hidden;
+      /* Скрываем всё, что выходит за пределы */
+    }
+
+    .fog {
+      /* Базовый стиль для всех слоёв тумана */
+      position: absolute;
+      /* Абсолютное позиционирование */
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .fog-top {
+      /* Стиль для верхнего тумана (градиент от малинового к прозрачному) */
+      background: linear-gradient(to bottom,
+        rgba(255, 0, 255, 0.15) 0%,
+        /* 0% — полностью малиновый с прозрачностью 15% */
+        rgba(255, 0, 255, 0.12) 5%,
+        /* 5% — 12% прозрачности */
+        rgba(255, 0, 255, 0.09) 15%,
+        /* 15% — 9% прозрачности */
+        rgba(255, 0, 255, 0.06) 30%,
+        /* 30% — 6% */
+        rgba(255, 0, 255, 0.03) 50%,
+        /* 50% — 3% */
+        rgba(255, 0, 255, 0.01) 75%,
+        /* 75% — 1% */
+        transparent 100%);
+      /* 100% — полностью прозрачный */
+    }
+
+    .fog-bottom {
+      /* Стиль для нижнего тумана (градиент от голубого к прозрачному) */
+      background: linear-gradient(to top,
+        rgba(0, 150, 255, 0.15) 0%,
+        rgba(0, 150, 255, 0.12) 5%,
+        rgba(0, 150, 255, 0.09) 15%,
+        rgba(0, 150, 255, 0.06) 30%,
+        rgba(0, 150, 255, 0.03) 50%,
+        rgba(0, 150, 255, 0.01) 75%,
+        transparent 100%);
+    }
+
+    .fog-left {
+      /* Стиль для левого тумана (двойной градиент от малинового к голубому) */
+      background: linear-gradient(to right,
+        rgba(255, 0, 255, 0.08) 0%,
+        rgba(255, 0, 255, 0.06) 10%,
+        rgba(255, 0, 255, 0.04) 20%,
+        rgba(255, 0, 255, 0.03) 35%,
+        rgba(255, 0, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.03) 65%,
+        rgba(0, 150, 255, 0.04) 80%,
+        rgba(0, 150, 255, 0.06) 90%,
+        rgba(0, 150, 255, 0.08) 100%);
+    }
+
+    .fog-right {
+      /* Стиль для правого тумана (зеркально левому) */
+      background: linear-gradient(to left,
+        rgba(255, 0, 255, 0.08) 0%,
+        rgba(255, 0, 255, 0.06) 10%,
+        rgba(255, 0, 255, 0.04) 20%,
+        rgba(255, 0, 255, 0.03) 35%,
+        rgba(255, 0, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.02) 50%,
+        rgba(0, 150, 255, 0.03) 65%,
+        rgba(0, 150, 255, 0.04) 80%,
+        rgba(0, 150, 255, 0.06) 90%,
+        rgba(0, 150, 255, 0.08) 100%);
+    }
+
+    #score-display {
+      /* Стиль блока отображения счёта (игрок : AI) */
+      position: absolute;
+      /* Абсолютное позиционирование */
+      top: 20px;
+      /* Отступ сверху 20 пикселей */
+      left: 50%;
+      /* Сдвигаем на половину ширины родителя */
+      transform: translateX(-50%);
+      /* Сдвигаем обратно на половину своей ширины — идеальное центрирование по горизонтали */
+      font-family: 'Courier New', monospace;
+      /* Моноширинный шрифт для стиля ретро-игр */
+      font-size: 24px;
+      /* Размер шрифта */
+      font-weight: bold;
+      /* Жирное начертание */
+      color: #fff;
+      /* Белый цвет текста */
+      text-shadow: 0 0 10px #ffffff;
+      /* Свечение текста */
+      z-index: 100;
+      /* Высокий слой, чтобы перекрывать всё */
+      background: rgba(0, 0, 0, 0.6);
+      /* Полупрозрачный чёрный фон */
+      padding: 10px 20px;
+      /* Внутренние отступы: сверху/снизу 10px, слева/справа 20px */
+      border-radius: 10px;
+      /* Скругление углов */
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      /* Тонкая полупрозрачная белая рамка */
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+      /* Тень для эффекта свечения */
+    }
+
+    .player-score {
+      /* Стиль для счёта игрока (синий цвет) */
+      color: #0096ff;
+      text-shadow: 0 0 15px #0096ff;
+    }
+
+    .ai-score {
+      /* Стиль для счёта AI (малиновый цвет) */
+      color: #ff00ff;
+      text-shadow: 0 0 15px #ff00ff;
+    }
+
+    .score-separator {
+      /* Стиль для разделителя ":" между счетами */
+      color: #ffffff;
+      margin: 0 15px;
+      /* Отступы слева и справа по 15px */
+    }
+
+    #victory-screen {
+      /* Экран победы, появляется при окончании игры */
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      /* Тёмный полупрозрачный фон */
+      display: none;
+      /* По умолчанию скрыт */
+      justify-content: center;
+      /* Центрирование по горизонтали (flex) */
+      align-items: center;
+      /* Центрирование по вертикали (flex) */
+      z-index: 1;
+    }
+
+    .victory-message {
+      /* Стиль сообщения о победе */
+      font-family: 'Courier New', monospace;
+      font-size: 48px;
+      /* Огромный шрифт */
+      font-weight: bold;
+      text-align: center;
+      /* Текст по центру */
+      text-shadow: 0 0 20px currentColor;
+      /* Свечение цветом текста */
+      animation: pulse 0.5s infinite;
+      /* Анимация пульсации, бесконечная, длительность 0.5 секунды */
+    }
+
+    .victory-player {
+      /* Цвет победы игрока (синий) */
+      color: #0096ff;
+    }
+
+    .victory-ai {
+      /* Цвет победы AI (малиновый) */
+      color: #ff00ff;
+    }
+
+    @keyframes pulse {
+      /* Описание анимации пульсации */
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.05);
+        /* Увеличиваем на 5% */
+        opacity: 0.9;
+        /* Немного уменьшаем прозрачность */
+      }
+
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Тело страницы, содержит canvas для рисования игры -->
+  <canvas id="game"></canvas>
+  <!-- Холст, на котором будет отображаться вся графика игры. ID 'game' нужен для доступа из JavaScript -->
+
+  <div class="glow-container">
+    <!-- Контейнер с эффектами свечения -->
+    <div class="fog fog-top"></div>
+    <!-- Верхний слой тумана -->
+    <div class="fog fog-bottom"></div>
+    <!-- Нижний слой тумана -->
+    <div class="fog fog-left"></div>
+    <!-- Левый слой тумана -->
+    <div class="fog fog-right"></div>
+    <!-- Правый слой тумана -->
+  </div>
+
+  <div id="score-display">
+    <!-- Блок отображения счёта -->
+    <span class="player-score" id="player-score">0</span>
+    <!-- Счёт игрока (синий) -->
+    <span class="score-separator">:</span>
+    <!-- Разделитель -->
+    <span class="ai-score" id="ai-score">0</span>
+    <!-- Счёт AI (малиновый) -->
+  </div>
+
+  <div id="victory-screen">
+    <!-- Экран победы -->
+    <div class="victory-message" id="victory-message"></div>
+    <!-- Сообщение о победе будет вставлено сюда -->
+  </div>
+
+  <script>
+    // =====================================================
+    // БЛОК 1: НАСТРОЙКИ ИГРЫ (КОНСТАНТЫ)
+    // =====================================================
+    // Object.freeze() делает объект неизменяемым (константы игры)
+    const GameSettings = Object.freeze({
+      ZONE_HEIGHT_RATIO: 0.5,
+      // Какая часть экрана по высоте отведена для движения платформ (0.5 = 50%)
+
+      SIZE_CONFIG: {
+        HIT_DECREASE: 1,
+        // На сколько процентов уменьшается платформа при ударе по мячу
+        GOAL_DECREASE: 5,
+        // На сколько процентов уменьшается платформа при пропущенном голе
+        MIN_SIZE: 20,
+        // Минимальный размер платформы в процентах (20% от исходной)
+        MAX_SIZE: 300
+        // Максимальный размер платформы в процентах (300% от исходной)
+      },
+
+      DRAG_CONFIG: {
+        ENABLED: true,
+        // Включено ли сопротивление воздуха (drag)
+        COEFFICIENT: 0.0008,
+        // Коэффициент сопротивления воздуха
+        MIN_SPEED: 3.0,
+        // Минимальная скорость мяча
+        MAX_SPEED: 10.0,
+        // Максимальная скорость мяча
+        DECELERATION: 0.997
+        // Фактор замедления (каждый кадр скорость умножается на 0.997)
+      },
+
+      PHYSICS: {
+        REBOUND_POWER: 0.9,
+        // Сила отскока от платформы
+        SPIN_INFLUENCE: 8,
+        // Влияние вращения на траекторию
+        SPIN_POWER_BOOST: 2,
+        // Усиление скорости от вращения
+        SPIN_ENERGY_TRANSFER: 1,
+        // Передача энергии вращения
+
+        PLATFORM_TRANSFER_X: 1,
+        // Передача горизонтальной скорости платформы мячу
+        PLATFORM_TRANSFER_Y: 1,
+        // Передача вертикальной скорости платформы мячу
+
+        APPROACH_POWER: 0.03,
+        ANGLE_EFFECT: 0.9,
+
+        SPIN_TRANSFER_X: 1.5,
+        SPIN_TRANSFER_Y: 1.5,
+        SPIN_INFLUENCE_MOVE: 1.2,
+
+        SPIN_DECAY_FLIGHT: 0.97,
+        // Затухание вращения в полёте
+
+        SURFACE: {
+          WALL_REBOUND_FACTOR: 1.2,
+          PLATFORM_SPIN_FACTOR: 0.8,
+          SPIN_LOSS_ON_WALL: 0.7,
+          // Потеря вращения при ударе о стену
+          SPIN_LOSS_ON_PLATFORM: 0.5
+          // Потеря вращения при ударе о платформу
+        }
+      },
+
+      GOAL_CONFIG: {
+        INITIAL_OPENING: 0,
+        // Начальное открытие ворот (0% — полностью закрыты)
+        HIT_OPEN_INCREMENT: 5,
+        // На сколько процентов открываются ворота при ударе платформы
+        BLOCK_RECOVERY: 2,
+        // На сколько процентов закрываются ворота после удара по мячу
+        MAX_OPENING: 100,
+        // Максимальное открытие ворот (100% — полностью открыты)
+        WALL_COLOR_INACTIVE: '#333333',
+        // Цвет закрытой части ворот
+      },
+
+      BALL_MAX_SPEED: 14,
+      // Максимальная скорость мяча
+      PLATFORM_MAX_SPEED: 14,
+      // Максимальная скорость платформы
+      PLATFORM_INERTIA: 0.94,
+      // Инерция платформы (чем меньше, тем быстрее останавливается)
+      PLATFORM_FOLLOW_BASE: 0.15,
+      // Базовая скорость следования за пальцем
+      PLATFORM_FOLLOW_FACTOR: 0.001,
+      // Дополнительный фактор скорости в зависимости от расстояния
+      MAX_FOLLOW_STRENGTH: 0.35,
+      // Максимальная сила следования
+      BALL_SUBSTEPS: 4,
+      // На сколько подшагов разбивается движение мяча для точной обработки столкновений
+      COLLISION_EFFECT_COOLDOWN: 5,
+      // Задержка между эффектами столкновений (в кадрах)
+    });
+
+    // =====================================================
+    // БЛОК 2: ПОЛУЧЕНИЕ ЭЛЕМЕНТОВ СТРАНИЦЫ
+    // =====================================================
+    const canvas = document.getElementById('game');
+    // Находим элемент canvas по его ID 'game'
+    const ctx = canvas.getContext('2d');
+    // Получаем контекст рисования в 2D для canvas
+
+    const playerScoreElement = document.getElementById('player-score');
+    // Элемент для отображения счёта игрока
+    const aiScoreElement = document.getElementById('ai-score');
+    // Элемент для отображения счёта AI
+    const victoryScreen = document.getElementById('victory-screen');
+    // Элемент экрана победы
+    const victoryMessage = document.getElementById('victory-message');
+    // Элемент сообщения о победе
+
+    // =====================================================
+    // БЛОК 3: ПЕРЕМЕННЫЕ СОСТОЯНИЯ ИГРЫ
+    // =====================================================
+    let frameCounter = 0;
+    // Счётчик кадров (используется для периодических действий)
+    let controlMode = 'AI';
+    // Режим управления: 'AI' — компьютер управляет игроком, 'PLAYER' — игрок управляет сам
+
+    // =====================================================
+    // ФУНКЦИЯ: изменение размера canvas при изменении окна
+    // =====================================================
+    function resize() {
+      canvas.width = window.innerWidth;
+      // Устанавливаем ширину canvas равной ширине окна браузера
+      canvas.height = window.innerHeight;
+      // Устанавливаем высоту canvas равной высоте окна браузера
+    }
+
+    window.addEventListener('resize', resize);
+    // Добавляем обработчик события изменения размера окна
+    resize();
+    // Вызываем функцию сразу, чтобы установить начальные размеры
+
+    // =====================================================
+    // ФУНКЦИЯ: создание начального состояния платформы игрока (нижняя)
+    // =====================================================
+    function initializePlayer() {
+      return {
+        x: canvas.width / 2 - 50,
+        // Начальная позиция по X: центр минус половина ширины (50)
+        y: canvas.height - 70,
+        // Y-координата: отступ 70 пикселей от низа
+        width: 100,
+        // Ширина платформы
+        height: 12,
+        // Высота платформы
+        minY: canvas.height - (canvas.height * GameSettings.ZONE_HEIGHT_RATIO),
+        // Минимальная Y (граница зоны движения снизу)
+        maxY: canvas.height - 30,
+        // Максимальная Y (граница зоны движения сверху для нижней платформы)
+        originalWidth: 100,
+        // Исходная ширина (запоминаем для изменения размера)
+        originalHeight: 12,
+        // Исходная высота
+        hits: 0,
+        // Счётчик ударов по мячу
+        sizePercent: 100,
+        // Текущий размер в процентах от исходного
+        active: true,
+        // Активна ли платформа (не уничтожена)
+        curveHeight: 6,
+        // Высота изгиба платформы (для эффекта овальной формы)
+        vx: 0,
+        // Скорость по X
+        vy: 0,
+        // Скорость по Y
+        targetX: canvas.width / 2 - 50,
+        // Целевая позиция X (для следования за пальцем)
+        targetY: canvas.height - 70,
+        // Целевая позиция Y
+        goal: {
+          openingPercent: GameSettings.GOAL_CONFIG.INITIAL_OPENING,
+          // Процент открытия ворот игрока
+          isOpen: function() { return this.openingPercent > 0; }
+          // Метод, возвращающий true, если ворота открыты
+        }
+      };
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание начального состояния платформы AI (верхняя)
+    // =====================================================
+    function initializeAI() {
+      return {
+        x: canvas.width / 2 - 50,
+        y: 70,
+        // Начальная позиция: отступ 70 пикселей от верха
+        width: 100,
+        height: 12,
+        minY: canvas.height * GameSettings.ZONE_HEIGHT_RATIO,
+        // Минимальная Y (граница зоны сверху)
+        maxY: 30,
+        // Максимальная Y (граница зоны снизу для верхней платформы)
+        reactionTime: 0.07,
+        // Время реакции AI (чем меньше, тем быстрее)
+        errorMargin: 15,
+        // Погрешность AI в пикселях (чем больше, тем хуже точность)
+        originalWidth: 100,
+        originalHeight: 12,
+        hits: 0,
+        sizePercent: 100,
+        active: true,
+        curveHeight: 6,
+        vx: 0,
+        vy: 0,
+        goal: {
+          openingPercent: GameSettings.GOAL_CONFIG.INITIAL_OPENING,
+          isOpen: function() { return this.openingPercent > 0; }
+        }
+      };
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание начального состояния мяча
+    // =====================================================
+    function initializeBall() {
+      return {
+        x: canvas.width / 2,
+        // Центр canvas по X
+        y: canvas.height / 2,
+        // Центр canvas по Y
+        radius: 8,
+        // Радиус мяча в пикселях
+        dx: 5 * (Math.random() > 0.5 ? 1 : -1),
+        // Скорость по X: случайное направление (влево или вправо)
+        dy: -5,
+        // Скорость по Y: отрицательная (вверх)
+        spin: 0,
+        // Вращение мяча (положительное — по часовой, отрицательное — против)
+        speedMult: 1.0,
+        // Множитель скорости (для спецэффектов)
+        active: true,
+        // Активен ли мяч
+        color: '#ffffff',
+        // Цвет мяча (белый)
+        effect: null,
+        // Эффект мяча (heavy/light/split)
+        trail: [],
+        // Массив для хранения следов мяча (позиции в предыдущих кадрах)
+        lastEffectFrame: 0
+        // Последний кадр, когда был создан эффект столкновения
+      };
+    }
+
+    // Создаём объекты игрока, AI и мяча с помощью функций инициализации
+    let player = initializePlayer();
+    let ai = initializeAI();
+    const ball = initializeBall();
+
+    let playerScore = 0;
+    // Счёт игрока (сколько голов забил AI)
+    let aiScore = 0;
+    // Счёт AI (сколько голов забил игрок)
+
+    let lastPlayerX = player.x;
+    let lastPlayerY = player.y;
+    // Запоминаем предыдущую позицию игрока для вычисления скорости
+    let lastAiX = ai.x;
+    let lastAiY = ai.y;
+    // Запоминаем предыдущую позицию AI
+
+    let touchActive = false;
+    // Флаг активного касания (палец на экране)
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    // Последние координаты касания
+    let gameActive = true;
+    // Активна ли игра (не закончена)
+
+    const particles = [];
+    // Массив частиц для эффектов (взрывы, искры)
+    const sparks = [];
+    // Массив искр для эффектов
+
+    // =====================================================
+    // КЛАСС: Умный контроллер AI (играет за игрока, пока тот не коснулся)
+    // =====================================================
+    class SmartController {
+      constructor(platform, isTop) {
+        this.platform = platform;
+        // Платформа, которой управляет контроллер
+        this.isTop = isTop;
+        // Флаг: true — верхняя платформа, false — нижняя
+        this.tactic = 'defend';
+        // Текущая тактика: 'defend' (защита), 'attack' (атака), 'bank' (от борта), 'spin' (с вращением), 'fake' (обманка)
+        this.aggression = 0.7;
+        // Агрессивность (0-1)
+        this.skillLevel = 0.8;
+        // Уровень мастерства
+        this.lastDecisionFrame = 0;
+        // Кадр последнего принятия решения
+      }
+
+      // Анализ ситуации на поле
+      analyze(ball, opponentPlatform, canvas) {
+        const distToGoal = this.isTop ? ball.y : canvas.height - ball.y;
+        // Расстояние до ворот (для верхней платформы — координата Y мяча, для нижней — расстояние до низа)
+        const opponentCenter = opponentPlatform.x + opponentPlatform.width / 2;
+        // Центр платформы противника
+        const ballCenter = ball.x;
+        // Центр мяча
+        const opponentOffset = Math.abs(opponentCenter - ballCenter);
+        // Отклонение центра противника от мяча
+
+        const leftCornerFree = opponentPlatform.x < 80;
+        // Свободен ли левый угол (платформа противника далеко слева)
+        const rightCornerFree = opponentPlatform.x + opponentPlatform.width > canvas.width - 80;
+        // Свободен ли правый угол
+        const canUseBank = ball.x < 100 || ball.x > canvas.width - 100;
+        // Можно ли использовать отскок от борта (мяч близко к краю)
+        const canUseSpin = Math.abs(ball.dx) < 4;
+        // Можно ли использовать вращение (горизонтальная скорость мяча мала)
+
+        return {
+          isAttacking: distToGoal < 150 && ((this.isTop && ball.dy < 0) || (!this.isTop && ball.dy > 0)),
+          // Атакуем ли (мяч близко к воротам и движется в сторону ворот)
+          opponentIsCentered: opponentOffset < opponentPlatform.width / 3,
+          // Противник ли в центре?
+          cornersAreFree: leftCornerFree || rightCornerFree,
+          // Свободны ли углы?
+          canUseBank: canUseBank,
+          canUseSpin: canUseSpin,
+          distToGoal: distToGoal
+        };
+      }
+
+      // Выбор тактики на основе ситуации
+      selectTactic(situation) {
+        const r = Math.random();
+        // Случайное число от 0 до 1 для добавления непредсказуемости
+
+        if (situation.isAttacking && this.aggression > 0.4) {
+          // Если атакуем и агрессивность достаточно высока
+          if (situation.canUseBank && r < 0.35) return 'bank';
+          // Можно от борта?
+          if (situation.canUseSpin && r < 0.3) return 'spin';
+          // Можно с вращением?
+          if (situation.cornersAreFree && r < 0.5) return 'corner';
+          // Свободны углы?
+          return 'attack';
+          // Обычная атака
+        }
+
+        if (this.skillLevel > 0.6 && r < 0.25) {
+          // Если уровень мастерства высокий и повезло
+          if (situation.canUseBank) return 'bank';
+          if (situation.canUseSpin) return 'spin';
+          if (situation.opponentIsCentered) return 'fake';
+          // Обманка, если противник в центре
+        }
+
+        return 'defend';
+        // По умолчанию защита
+      }
+
+      // Расчёт целевой позиции на основе выбранной тактики
+      calculateTarget(ball, opponentPlatform, canvas) {
+        const target = { x: ball.x, y: this.platform.y, spin: 0, power: 1.0 };
+        // Базовая цель — просто под мячом
+
+        switch (this.tactic) {
+          case 'attack':
+          case 'corner':
+            const opponentCenter = opponentPlatform.x + opponentPlatform.width / 2;
+            const targetX = opponentCenter < canvas.width / 2 ? canvas.width - 70 : 70;
+            // Атакуем в противоположный угол от того, где стоит противник
+            target.x = targetX;
+            target.power = 1.2;
+            // Увеличиваем силу удара
+            break;
+
+          case 'bank':
+            const wallX = ball.x < canvas.width / 2 ? 25 : canvas.width - 25;
+            // Отправляем мяч в ближайшую стену
+            target.x = wallX;
+            target.power = 0.9;
+            break;
+
+          case 'spin':
+            const opponentCenterSpin = opponentPlatform.x + opponentPlatform.width / 2;
+            const spinDir = ball.x < opponentCenterSpin ? 1 : -1;
+            target.x = opponentCenterSpin + (spinDir * 55);
+            // Бьём сбоку от противника с вращением
+            target.spin = spinDir * 5 + (Math.random() - 0.5) * 2;
+            target.power = 0.85;
+            break;
+
+          case 'fake':
+            const wallXfake = ball.x < canvas.width / 2 ? 30 : canvas.width - 30;
+            target.x = wallXfake;
+            // Фальшивый удар в стену
+            target.spin = (ball.x < canvas.width / 2 ? 4 : -4);
+            target.power = 0.8;
+            break;
+
+          default:
+            target.x = ball.x;
+            target.power = 0.95;
+            // Защита: просто под мячом
+        }
+
+        target.x = Math.max(20, Math.min(canvas.width - this.platform.width - 20, target.x));
+        // Ограничиваем, чтобы платформа не выходила за пределы экрана
+        return target;
+      }
+
+      // Обновление состояния контроллера (вызывается каждый кадр)
+      update(ball, opponentPlatform, canvas, frameCounter) {
+        if (!this.platform.active) return;
+        // Если платформа уничтожена, не управляем
+
+        const situation = this.analyze(ball, opponentPlatform, canvas);
+        // Анализируем ситуацию
+
+        if (frameCounter - this.lastDecisionFrame > 30) {
+          // Раз в 30 кадров меняем тактику
+          this.tactic = this.selectTactic(situation);
+          this.lastDecisionFrame = frameCounter;
+        }
+
+        const target = this.calculateTarget(ball, opponentPlatform, canvas);
+        // Получаем целевую позицию
+
+        const dx = target.x - this.platform.x;
+        const dy = target.y - this.platform.y;
+        // Разница между текущей позицией и целевой
+        const distance = Math.hypot(dx, dy);
+        // Расстояние до цели (гипотенуза)
+
+        let followStrength = 0.18 + distance * 0.0008;
+        // Сила следования: базовая + зависит от расстояния
+        followStrength = Math.min(0.32, followStrength);
+        // Ограничиваем максимальную силу
+
+        this.platform.vx += dx * followStrength;
+        // Изменяем скорость по X
+        this.platform.vy += dy * followStrength;
+        // Изменяем скорость по Y
+
+        const speed = Math.hypot(this.platform.vx, this.platform.vy);
+        // Текущая скорость
+        if (speed > GameSettings.PLATFORM_MAX_SPEED) {
+          // Если превышает максимум, нормализуем
+          this.platform.vx = this.platform.vx / speed * GameSettings.PLATFORM_MAX_SPEED;
+          this.platform.vy = this.platform.vy / speed * GameSettings.PLATFORM_MAX_SPEED;
+        }
+
+        this.platform.vx *= GameSettings.PLATFORM_INERTIA;
+        // Применяем инерцию (замедление)
+        this.platform.vy *= GameSettings.PLATFORM_INERTIA;
+
+        this.platform.x += this.platform.vx;
+        // Обновляем позицию по X
+        this.platform.y += this.platform.vy;
+        // Обновляем позицию по Y
+
+        this.platform.x = Math.max(0, Math.min(canvas.width - this.platform.width, this.platform.x));
+        // Ограничиваем X в пределах canvas
+
+        // Ограничения по Y в зависимости от того, верхняя или нижняя платформа
+        if (!this.isTop) {
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height - this.platform.height;
+          this.platform.y = Math.max(zoneTop, Math.min(zoneBottom, this.platform.y));
+        } else {
+          const zoneTop = 0;
+          const zoneBottom = canvas.height * GameSettings.ZONE_HEIGHT_RATIO - this.platform.height;
+          this.platform.y = Math.max(zoneTop, Math.min(zoneBottom, this.platform.y));
+        }
+
+        const distToBall = Math.abs(ball.y - this.platform.y);
+        // Расстояние по Y до мяча
+        const isInReach = distToBall < this.platform.height + ball.radius + 15;
+        // Мяч в пределах досягаемости?
+        const isMovingRightDirection = (this.isTop && ball.dy < 0) || (!this.isTop && ball.dy > 0);
+        // Мяч движется в сторону платформы?
+
+        if (isInReach && isMovingRightDirection && target.power !== 1.0) {
+          ball.speedMult = target.power;
+          // Изменяем множитель скорости мяча при ударе
+        }
+        if (isInReach && isMovingRightDirection && target.spin !== 0) {
+          ball.spin += target.spin * 0.5;
+          // Добавляем вращение мячу
+        }
+      }
+    }
+
+    // Создаём умный контроллер для игрока (нижняя платформа)
+    let smartPlayer = new SmartController(player, false);
+
+    // =====================================================
+    // ФУНКЦИЯ: применение сопротивления воздуха (drag)
+    // =====================================================
+    function applyAirDrag() {
+      if (!GameSettings.DRAG_CONFIG.ENABLED || !ball.active) return;
+      // Если сопротивление отключено или мяч неактивен, выходим
+
+      const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      // Текущая скорость мяча
+      if (currentSpeed < 0.5) return;
+      // Если скорость очень маленькая, не применяем
+
+      const dragForce = GameSettings.DRAG_CONFIG.COEFFICIENT * currentSpeed * currentSpeed;
+      // Сила сопротивления = коэффициент * скорость²
+      const angle = Math.atan2(ball.dy, ball.dx);
+      // Угол направления движения
+      const speedReduction = dragForce / currentSpeed;
+      // Величина уменьшения скорости
+      ball.dx -= Math.cos(angle) * speedReduction;
+      // Уменьшаем скорость по X
+      ball.dy -= Math.sin(angle) * speedReduction;
+      // Уменьшаем скорость по Y
+
+      ball.dx *= GameSettings.DRAG_CONFIG.DECELERATION;
+      // Дополнительное замедление
+      ball.dy *= GameSettings.DRAG_CONFIG.DECELERATION;
+
+      const newSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      // Новая скорость
+      if (newSpeed > GameSettings.DRAG_CONFIG.MAX_SPEED) {
+        // Если превышает максимум, ограничиваем
+        const scale = GameSettings.DRAG_CONFIG.MAX_SPEED / newSpeed;
+        ball.dx *= scale;
+        ball.dy *= scale;
+      }
+
+      const finalSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      // Финальная скорость
+      if (finalSpeed < 2.0 && finalSpeed > 0.1) {
+        // Если скорость упала ниже 2, но не нулевая, поднимаем до минимальной
+        const minScale = 2.0 / finalSpeed;
+        ball.dx *= minScale;
+        ball.dy *= minScale;
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: ограничение максимальной скорости мяча
+    // =====================================================
+    function limitBallSpeed() {
+      if (!ball.active) return;
+
+      const currentSpeed = Math.hypot(ball.dx, ball.dy);
+      // Текущая скорость (гипотенуза)
+
+      if (currentSpeed > GameSettings.BALL_MAX_SPEED) {
+        const scale = GameSettings.BALL_MAX_SPEED / currentSpeed;
+        ball.dx *= scale;
+        ball.dy *= scale;
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: ограничение скорости платформы
+    // =====================================================
+    function limitPlatformSpeed(platform) {
+      if (!platform.active) return;
+
+      const currentSpeed = Math.hypot(platform.vx, platform.vy);
+
+      if (currentSpeed > GameSettings.PLATFORM_MAX_SPEED) {
+        const scale = GameSettings.PLATFORM_MAX_SPEED / currentSpeed;
+        platform.vx *= scale;
+        platform.vy *= scale;
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: применение инерции к платформе
+    // =====================================================
+    function applyPlatformInertia(platform) {
+      if (!platform.active) return;
+
+      platform.vx *= GameSettings.PLATFORM_INERTIA;
+      platform.vy *= GameSettings.PLATFORM_INERTIA;
+
+      if (Math.abs(platform.vx) < 0.05) platform.vx = 0;
+      // Если скорость очень маленькая, обнуляем
+      if (Math.abs(platform.vy) < 0.05) platform.vy = 0;
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: расчёт отскока с учётом вращения
+    // =====================================================
+    function calculateSpinRebound(ball, platform, isWall = false) {
+      const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (currentSpeed < 0.1) return { dx: ball.dx, dy: ball.dy, spin: ball.spin };
+
+      const spinStrength = Math.min(1, Math.abs(ball.spin) / 30);
+      // Сила вращения (от 0 до 1)
+      const spinDirection = Math.sign(ball.spin);
+      // Направление вращения (-1, 0, 1)
+
+      const powerBoost = 1 + (spinStrength * GameSettings.PHYSICS.SPIN_POWER_BOOST);
+      // Увеличение силы удара от вращения
+      const spinEnergy = Math.abs(ball.spin) * GameSettings.PHYSICS.SPIN_ENERGY_TRANSFER;
+      // Энергия вращения
+
+      const turnAngle = spinDirection * spinStrength * GameSettings.PHYSICS.SPIN_INFLUENCE;
+      // Угол поворота траектории от вращения
+      const flightAngle = Math.atan2(ball.dy, ball.dx);
+      // Текущий угол полёта
+      const newAngle = flightAngle + turnAngle * 0.1;
+      // Новый угол с учётом вращения
+
+      let newDx = Math.cos(newAngle) * (currentSpeed * powerBoost + spinEnergy);
+      let newDy = Math.sin(newAngle) * (currentSpeed * powerBoost + spinEnergy);
+      // Новая скорость
+
+      let spinLoss;
+      if (isWall) {
+        spinLoss = GameSettings.PHYSICS.SURFACE.SPIN_LOSS_ON_WALL;
+      } else {
+        spinLoss = GameSettings.PHYSICS.SURFACE.SPIN_LOSS_ON_PLATFORM;
+      }
+      // Потеря вращения в зависимости от поверхности
+
+      const newSpin = ball.spin * spinLoss;
+      // Новое вращение
+
+      return {
+        dx: newDx,
+        dy: newDy,
+        spin: newSpin
+      };
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание частиц (пыли)
+    // =====================================================
+    function createParticle(x, y, color, count = 5) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 8,
+          // Случайная скорость по X
+          vy: (Math.random() - 0.5) * 8,
+          // Случайная скорость по Y
+          radius: 2,
+          color,
+          life: 1.0
+          // Время жизни (1 = полная, уменьшается со временем)
+        });
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание искр
+    // =====================================================
+    function createSparks(x, y, color, count = 8, force = 1.0) {
+      for (let i = 0; i < count; i++) {
+        sparks.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 8 * force,
+          vy: (Math.random() - 0.5) * 8 * force,
+          radius: 1 + Math.random() * 2,
+          color,
+          life: 0.8 + Math.random() * 0.4,
+          fadeSpeed: 0.02 + Math.random() * 0.03
+          // Скорость затухания
+        });
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание искр от вращения
+    // =====================================================
+    function createSpinSparks(x, y, spin, count = 12) {
+      const spinStrength = Math.min(2.0, Math.abs(spin) / 10);
+      if (spinStrength < 0.3) return;
+      const color = spin > 0 ? '#00ffff' : '#ff00ff';
+      // Цвет зависит от направления вращения
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * ball.radius * 0.8;
+        const offsetX = Math.cos(angle) * distance;
+        const offsetY = Math.sin(angle) * distance;
+        const sparkAngle = angle + (spin > 0 ? Math.PI / 2 : -Math.PI / 2);
+        const speed = 1 + Math.random() * 3 * spinStrength;
+        sparks.push({
+          x: x + offsetX,
+          y: y + offsetY,
+          vx: Math.cos(sparkAngle) * speed,
+          vy: Math.sin(sparkAngle) * speed,
+          radius: 1 + Math.random() * 2 * spinStrength,
+          color,
+          life: 0.6 + Math.random() * 0.4,
+          fadeSpeed: 0.03 + Math.random() * 0.04
+        });
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: уменьшение платформы при попадании
+    // =====================================================
+    function decreasePlatform(platform, amount) {
+      platform.sizePercent = Math.max(
+        GameSettings.SIZE_CONFIG.MIN_SIZE,
+        platform.sizePercent - amount
+      );
+      // Уменьшаем размер в процентах, но не меньше минимума
+
+      if (platform.sizePercent <= GameSettings.SIZE_CONFIG.MIN_SIZE) {
+        platform.active = false;
+        // Платформа уничтожена
+        platform.width = 0;
+        for (let i = 0; i < 20; i++) {
+          createSparks(platform.x + platform.originalWidth / 2, platform.y,
+            platform === player ? '#0096ff' : '#ff00ff', 15, 1.5);
+          // Эффект взрыва
+        }
+        checkVictory();
+        // Проверяем, не закончилась ли игра
+        return true;
+      }
+
+      const oldWidth = platform.width;
+      platform.width = (platform.originalWidth * platform.sizePercent) / 100;
+      // Пересчитываем ширину в пикселях
+      platform.height = (platform.originalHeight * platform.sizePercent) / 100;
+      // Пересчитываем высоту
+      platform.curveHeight = (6 * platform.sizePercent) / 100;
+      // Пересчитываем изгиб
+      platform.x = platform.x + (oldWidth - platform.width) / 2;
+      // Корректируем позицию X, чтобы платформа оставалась на месте центром
+      return false;
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: проверка победы
+    // =====================================================
+    function checkVictory() {
+      if (!player.active && ai.active) {
+        // Игрок уничтожен, AI жив
+        showVictory('AI ПОБЕДИЛ!', 'victory-ai');
+        gameActive = false;
+        ball.active = false;
+      } else if (player.active && !ai.active) {
+        // AI уничтожен, игрок жив
+        showVictory('ИГРОК ПОБЕДИЛ!', 'victory-player');
+        gameActive = false;
+        ball.active = false;
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: отображение экрана победы
+    // =====================================================
+    function showVictory(message, className) {
+      victoryMessage.textContent = message;
+      // Устанавливаем текст сообщения
+      victoryMessage.className = `victory-message ${className}`;
+      // Устанавливаем класс для цвета
+      victoryScreen.style.display = 'flex';
+      // Показываем экран победы
+      setTimeout(() => {
+        resetGame();
+        // Через 3 секунды перезапускаем игру
+      }, 3000);
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: сброс игры
+    // =====================================================
+    function resetGame() {
+      // Восстанавливаем игрока
+      player.active = true;
+      player.sizePercent = 100;
+      player.width = player.originalWidth;
+      player.height = player.originalHeight;
+      player.curveHeight = 6;
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - 70;
+      player.hits = 0;
+      player.vx = 0;
+      player.vy = 0;
+      player.goal.openingPercent = GameSettings.GOAL_CONFIG.INITIAL_OPENING;
+
+      // Восстанавливаем AI
+      ai.active = true;
+      ai.sizePercent = 100;
+      ai.width = ai.originalWidth;
+      ai.height = ai.originalHeight;
+      ai.curveHeight = 6;
+      ai.x = canvas.width / 2 - ai.width / 2;
+      ai.y = 70;
+      ai.hits = 0;
+      ai.vx = 0;
+      ai.vy = 0;
+      ai.goal.openingPercent = GameSettings.GOAL_CONFIG.INITIAL_OPENING;
+
+      playerScore = 0;
+      aiScore = 0;
+
+      resetBall();
+
+      victoryScreen.style.display = 'none';
+      gameActive = true;
+      controlMode = 'AI';
+      smartPlayer = new SmartController(player, false);
+
+      updateScoreDisplay();
+    }
+
+    // =====================================================
+    // ОБРАБОТЧИКИ КАСАНИЙ (для управления пальцем/мышью)
+    // =====================================================
+    function handleTouchStart(y) {
+      // Проверяем, коснулись ли в зоне игрока (нижняя половина)
+      if (y > canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO)) {
+        touchActive = true;
+        controlMode = 'PLAYER';
+        // Переключаем управление на игрока
+        lastTouchX = 0;
+        lastTouchY = 0;
+      }
+    }
+
+    function handleTouchMove(x, y) {
+      if (!touchActive) return;
+
+      lastTouchX = x;
+      lastTouchY = y;
+
+      let targetX = x - player.width / 2;
+      // Центрируем платформу относительно пальца
+      targetX = clamp(targetX, 0, canvas.width - player.width);
+      // Не выходим за границы
+
+      const platformOffset = 60;
+      // Смещение платформы относительно пальца (палец выше платформы)
+      let targetY = y - platformOffset;
+      const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+      const zoneBottom = canvas.height;
+      targetY = clamp(targetY, zoneTop, zoneBottom - player.height);
+      // Не выходим за границы зоны
+
+      player.targetX = targetX;
+      player.targetY = targetY;
+    }
+
+    // Добавляем обработчики для касаний (мобильные устройства)
+    canvas.addEventListener('touchstart', e => {
+      handleTouchStart(e.touches[0].clientY);
+      e.preventDefault(); // Отменяем стандартное поведение (прокрутку)
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      handleTouchMove(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+      touchActive = false;
+    });
+
+    // Добавляем обработчики для мыши (десктоп)
+    canvas.addEventListener('mousedown', e => handleTouchStart(e.clientY));
+    canvas.addEventListener('mousemove', e => handleTouchMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', () => {
+      touchActive = false;
+    });
+
+    // Вспомогательная функция ограничения значения
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: проверка столкновения с овальной платформой
+    // =====================================================
+    function collisionWithOval(ball, platform) {
+      if (!platform.active) return false;
+
+      // Сохраняем предыдущую позицию мяча
+      const prevX = ball.x - (ball.dx + ball.spin * GameSettings.PHYSICS.SPIN_INFLUENCE_MOVE) * ball.speedMult;
+      const prevY = ball.y - ball.dy * ball.speedMult;
+
+      const steps = 5;
+      // Количество подшагов для точной проверки
+      let collisionData = null;
+
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        // Интерполяция между предыдущей и текущей позицией
+        const checkX = prevX + (ball.x - prevX) * t;
+        const checkY = prevY + (ball.y - prevY) * t;
+
+        // Проверяем, находится ли точка в прямоугольнике платформы (с запасом)
+        const inRect = checkX + ball.radius > platform.x - 2 &&
+          checkX - ball.radius < platform.x + platform.width + 2 &&
+          checkY + ball.radius > platform.y - 2 &&
+          checkY - ball.radius < platform.y + platform.height + 2;
+
+        if (inRect) {
+          const relativeX = (checkX - platform.x) / platform.width;
+          // Относительная позиция по ширине платформы (0..1)
+          const curveFactor = Math.sin(relativeX * Math.PI);
+          // Синусоидальный изгиб
+          const curveY = platform.y + platform.curveHeight * (1 - Math.abs(curveFactor));
+          // Y-координата изогнутой поверхности в этой точке
+
+          const verticalCollision = Math.abs(checkY - curveY) < ball.radius + 2;
+          // Проверяем вертикальное столкновение с изогнутой поверхностью
+
+          if (verticalCollision) {
+            collisionData = {
+              hit: true,
+              slope: Math.cos(relativeX * Math.PI),
+              // Наклон в точке столкновения (для изменения траектории)
+              curveY: curveY,
+              pointX: checkX,
+              pointY: checkY
+            };
+            break;
+          }
+        }
+      }
+
+      return collisionData;
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: создание искр при полёте мяча
+    // =====================================================
+    function createFlightSparks() {
+      if (!ball.active) return;
+      const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+      if (speed < 3) return;
+      if (Math.random() < 0.15) {
+        const angle = Math.atan2(ball.dy, ball.dx);
+        const offsetAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
+        const distance = ball.radius * 0.7;
+        const sparkX = ball.x - Math.cos(angle) * distance;
+        const sparkY = ball.y - Math.sin(angle) * distance;
+        for (let i = 0; i < 1 + Math.floor(Math.random() * 2); i++) {
+          const sparkSpeed = 1 + Math.random() * 2;
+          sparks.push({
+            x: sparkX,
+            y: sparkY,
+            vx: Math.cos(offsetAngle) * sparkSpeed + (Math.random() - 0.5) * 0.5,
+            vy: Math.sin(offsetAngle) * sparkSpeed + (Math.random() - 0.5) * 0.5,
+            radius: 0.8 + Math.random() * 1.2,
+            color: '#ffffff',
+            life: 0.4 + Math.random() * 0.3,
+            fadeSpeed: 0.03 + Math.random() * 0.02
+          });
+        }
+      }
+    }
+
+    // =====================================================
+    // ОСНОВНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ МЯЧА (физика)
+    // =====================================================
+    function updateBall() {
+      if (!ball.active || !gameActive) return;
+
+      limitBallSpeed();
+
+      const totalDx = (ball.dx + ball.spin * GameSettings.PHYSICS.SPIN_INFLUENCE_MOVE) * ball.speedMult;
+      const totalDy = ball.dy * ball.speedMult;
+      // Общая скорость с учётом вращения и множителя
+
+      const stepDx = totalDx / GameSettings.BALL_SUBSTEPS;
+      const stepDy = totalDy / GameSettings.BALL_SUBSTEPS;
+      // Движение за один подшаг
+
+      let collisionHappened = false;
+
+      for (let step = 0; step < GameSettings.BALL_SUBSTEPS; step++) {
+        ball.x += stepDx;
+        ball.y += stepDy;
+
+        let wallHit = false;
+
+        // Столкновение с левой стеной
+        if (ball.x - ball.radius <= 0) {
+          ball.x = ball.radius;
+          const result = calculateSpinRebound(ball, null, true);
+          ball.dx = Math.abs(result.dx); // Отскок вправо
+          ball.dy = result.dy;
+          ball.spin = result.spin;
+          wallHit = true;
+        }
+        // Столкновение с правой стеной
+        else if (ball.x + ball.radius >= canvas.width) {
+          ball.x = canvas.width - ball.radius;
+          const result = calculateSpinRebound(ball, null, true);
+          ball.dx = -Math.abs(result.dx); // Отскок влево
+          ball.dy = result.dy;
+          ball.spin = result.spin;
+          wallHit = true;
+        }
+
+        // Столкновение с нижней границей (ворота игрока)
+        if (ball.y + ball.radius >= canvas.height) {
+          const goalWidth = canvas.width;
+          const openingSize = (player.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            // ГОЛ! Мяч попал в открытую часть ворот
+            aiScore++;
+            // Увеличиваем счёт AI
+            decreasePlatform(player, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            // Уменьшаем платформу игрока
+            updateScoreDisplay();
+
+            // Создаём эффект искр по всей ширине ворот
+            for (let i = 0; i < 20; i++) {
+              sparks.push({
+                x: Math.random() * canvas.width,
+                y: canvas.height - 5,
+                vx: (Math.random() - 0.5) * 5,
+                vy: -Math.random() * 5 - 2,
+                radius: 2 + Math.random() * 3,
+                color: '#00ffff',
+                life: 0.8,
+                fadeSpeed: 0.02
+              });
+            }
+
+            ball.y = canvas.height - ball.radius;
+            ball.dy = -Math.abs(ball.dy);
+            // Отскок вверх после гола
+          } else {
+            // Мяч попал в закрытую часть ворот — открываем ворота
+            player.goal.openingPercent = Math.min(
+              player.goal.openingPercent + GameSettings.GOAL_CONFIG.HIT_OPEN_INCREMENT,
+              GameSettings.GOAL_CONFIG.MAX_OPENING
+            );
+
+            ball.y = canvas.height - ball.radius;
+            const result = calculateSpinRebound(ball, null, true);
+            ball.dx = result.dx;
+            ball.dy = -Math.abs(result.dy);
+            ball.spin = result.spin;
+
+            createSparks(ball.x, canvas.height - 10, '#ffffff', 8, 0.8);
+            wallHit = true;
+          }
+        }
+
+        // Столкновение с верхней границей (ворота AI)
+        if (ball.y - ball.radius <= 0) {
+          const goalWidth = canvas.width;
+          const openingSize = (ai.goal.openingPercent / 100) * goalWidth;
+          const goalLeft = (goalWidth - openingSize) / 2;
+          const goalRight = goalLeft + openingSize;
+
+          if (ball.x > goalLeft && ball.x < goalRight) {
+            // ГОЛ! Мяч попал в ворота AI
+            playerScore++;
+            decreasePlatform(ai, GameSettings.SIZE_CONFIG.GOAL_DECREASE);
+            updateScoreDisplay();
+
+            for (let i = 0; i < 20; i++) {
+              sparks.push({
+                x: Math.random() * canvas.width,
+                y: 5,
+                vx: (Math.random() - 0.5) * 5,
+                vy: Math.random() * 5 + 2,
+                radius: 2 + Math.random() * 3,
+                color: '#ff00ff',
+                life: 0.8,
+                fadeSpeed: 0.02
+              });
+            }
+
+            ball.y = ball.radius;
+            ball.dy = Math.abs(ball.dy);
+            // Отскок вниз
+          } else {
+            // Мяч попал в закрытую часть ворот AI
+            ai.goal.openingPercent = Math.min(
+              ai.goal.openingPercent + GameSettings.GOAL_CONFIG.HIT_OPEN_INCREMENT,
+              GameSettings.GOAL_CONFIG.MAX_OPENING
+            );
+
+            ball.y = ball.radius;
+            const result = calculateSpinRebound(ball, null, true);
+            ball.dx = result.dx;
+            ball.dy = Math.abs(result.dy);
+            ball.spin = result.spin;
+
+            createSparks(ball.x, 10, '#ffffff', 8, 0.8);
+            wallHit = true;
+          }
+        }
+
+        // Проверка столкновения с платформой игрока
+        const playerCollision = collisionWithOval(ball, player);
+        if (playerCollision && !collisionHappened) {
+          collisionHappened = true;
+
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#0096ff', 4);
+            createSparks(ball.x, ball.y, '#0096ff', 8, 0.8);
+            createSparks(ball.x, ball.y, '#ffffff', 6, 0.6);
+          }
+
+          const result = calculateSpinRebound(ball, player, false);
+          ball.dx = result.dx;
+          ball.dy = result.dy;
+          ball.spin = result.spin;
+
+          // Добавляем влияние наклона платформы
+          ball.dx += -playerCollision.slope * GameSettings.PHYSICS.REBOUND_POWER;
+          // Передаём скорость платформы мячу
+          ball.dx += player.vx * GameSettings.PHYSICS.PLATFORM_TRANSFER_X;
+          ball.dy += player.vy * GameSettings.PHYSICS.PLATFORM_TRANSFER_Y;
+
+          decreasePlatform(player, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          player.hits++;
+
+          // Ворота игрока немного закрываются после удара
+          player.goal.openingPercent = Math.max(
+            player.goal.openingPercent - GameSettings.GOAL_CONFIG.BLOCK_RECOVERY,
+            0
+          );
+
+          updateScoreDisplay();
+        }
+
+        // Проверка столкновения с платформой AI
+        const aiCollision = collisionWithOval(ball, ai);
+        if (aiCollision && !collisionHappened) {
+          collisionHappened = true;
+
+          if (frameCounter - ball.lastEffectFrame > GameSettings.COLLISION_EFFECT_COOLDOWN) {
+            ball.lastEffectFrame = frameCounter;
+            createParticle(ball.x, ball.y, '#ff00ff', 4);
+            createSparks(ball.x, ball.y, '#ff00ff', 8, 0.8);
+            createSparks(ball.x, ball.y, '#ffffff', 6, 0.6);
+          }
+
+          const result = calculateSpinRebound(ball, ai, false);
+          ball.dx = result.dx;
+          ball.dy = result.dy;
+          ball.spin = result.spin;
+
+          ball.dx += -aiCollision.slope * GameSettings.PHYSICS.REBOUND_POWER;
+          ball.dx += ai.vx * GameSettings.PHYSICS.PLATFORM_TRANSFER_X;
+          ball.dy += ai.vy * GameSettings.PHYSICS.PLATFORM_TRANSFER_Y;
+
+          decreasePlatform(ai, GameSettings.SIZE_CONFIG.HIT_DECREASE);
+          ai.hits++;
+
+          ai.goal.openingPercent = Math.max(
+            ai.goal.openingPercent - GameSettings.GOAL_CONFIG.BLOCK_RECOVERY,
+            0
+          );
+
+          updateScoreDisplay();
+        }
+
+        // Если было столкновение со стеной, создаём искры
+        if (wallHit) {
+          const spinFactor = Math.min(1.5, Math.abs(ball.spin) / 15);
+          createSparks(ball.x, ball.y, '#ffffff', 8 + Math.floor(spinFactor * 4), 0.8 + spinFactor * 0.3);
+        }
+      }
+
+      // Добавляем след мяча
+      ball.trail.unshift({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 8) ball.trail.pop();
+
+      createFlightSparks();
+      applyAirDrag();
+
+      // Обработка спецэффектов мяча (не используются в текущей версии)
+      if (ball.effect === 'heavy') {
+        ball.speedMult = 0.7;
+        ball.color = '#ff9900';
+      } else if (ball.effect === 'light') {
+        ball.speedMult = 1.5;
+        ball.color = '#00ffff';
+      } else if (ball.effect === 'split') {
+        ball.color = '#ff00ff';
+      }
+
+      // Создаём искры от вращения, если оно сильное
+      if (Math.abs(ball.spin) > 1.5 && Math.random() < 0.4) {
+        const spinStrength = Math.min(2.0, Math.abs(ball.spin) / 8);
+        createSpinSparks(ball.x, ball.y, ball.spin, 3 + Math.floor(spinStrength * 6));
+      }
+
+      // Вращение затухает со временем
+      ball.spin *= GameSettings.PHYSICS.SPIN_DECAY_FLIGHT;
+      if (Math.abs(ball.spin) < 0.1) {
+        ball.spin = 0;
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: обновление AI (простой AI для верхней платформы)
+    // =====================================================
+    function updateAI() {
+      if (!ai.active || !gameActive) return;
+
+      const framesToPredict = 3;
+      // На сколько кадров вперёд предсказывать
+
+      if (ball.dy < 0) {
+        // Мяч летит вверх (к AI)
+        const predictedX = ball.x + ball.dx * framesToPredict;
+        // Предсказанная позиция мяча
+        const targetX = predictedX - ai.width / 2 + (Math.random() - 0.5) * ai.errorMargin;
+        // Целевая позиция с погрешностью
+        ai.x += (targetX - ai.x) * ai.reactionTime;
+        // Плавное движение к цели
+      } else {
+        // Мяч летит вниз (от AI) — меньше реакции
+        const targetX = ball.x - ai.width / 2 + (Math.random() - 0.5) * ai.errorMargin;
+        ai.x += (targetX - ai.x) * ai.reactionTime * 0.7;
+      }
+
+      ai.x = clamp(ai.x, 0, canvas.width - ai.width);
+      // Ограничиваем X
+
+      // AI также двигается по вертикали в пределах своей зоны
+      const aiZoneHeight = canvas.height * GameSettings.ZONE_HEIGHT_RATIO;
+      let aiT = ball.y / aiZoneHeight;
+      // Пропорция (0 = верх, 1 = низ зоны AI)
+      aiT = Math.max(0, Math.min(1, aiT));
+      const targetY = ai.maxY + (ai.minY - ai.maxY) * aiT;
+      ai.y += (targetY - ai.y) * 0.08;
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: обновление отображения счёта
+    // =====================================================
+    function updateScoreDisplay() {
+      const playerStatus = player.active ?
+        `${playerScore}<br><span style="font-size:12px;opacity:0.8">${player.sizePercent.toFixed(2)}%</span>` :
+        '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+      // Если платформа активна, показываем счёт и размер, иначе "УНИЧТОЖЕНА"
+
+      const aiStatus = ai.active ?
+        `${aiScore}<br><span style="font-size:12px;opacity:0.8">${ai.sizePercent.toFixed(2)}%</span>` :
+        '<span style="font-size:16px;opacity:0.7">УНИЧТ.</span>';
+
+      playerScoreElement.innerHTML = playerStatus;
+      aiScoreElement.innerHTML = aiStatus;
+
+      // Эффект пульсации при обновлении счёта
+      playerScoreElement.style.transform = 'scale(1.1)';
+      aiScoreElement.style.transform = 'scale(1.1)';
+
+      setTimeout(() => {
+        playerScoreElement.style.transform = 'scale(1)';
+        aiScoreElement.style.transform = 'scale(1)';
+      }, 150);
+    }
+
+    // =====================================================
+    // ОСНОВНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ ИГРЫ (вызывается каждый кадр)
+    // =====================================================
+    function update() {
+      if (!gameActive) return;
+
+      // Управление игроком (нижняя платформа)
+      if (player.active) {
+        if (controlMode === 'AI') {
+          // Умный AI управляет платформой игрока
+          smartPlayer.update(ball, ai, canvas, frameCounter);
+        } else if (touchActive) {
+          // Игрок управляет пальцем/мышью
+          const dx = player.targetX - player.x;
+          const dy = player.targetY - player.y;
+          const distance = Math.hypot(dx, dy);
+
+          let followStrength = GameSettings.PLATFORM_FOLLOW_BASE +
+            distance * GameSettings.PLATFORM_FOLLOW_FACTOR;
+          followStrength = Math.min(GameSettings.MAX_FOLLOW_STRENGTH, followStrength);
+
+          player.vx += dx * followStrength;
+          player.vy += dy * followStrength;
+
+          limitPlatformSpeed(player);
+          applyPlatformInertia(player);
+
+          player.x += player.vx;
+          player.y += player.vy;
+
+          // Ограничения позиции
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height;
+          player.y = clamp(player.y, zoneTop, zoneBottom - player.height);
+        } else {
+          // Нет касания — просто применяем инерцию
+          applyPlatformInertia(player);
+          player.x += player.vx;
+          player.y += player.vy;
+
+          player.x = clamp(player.x, 0, canvas.width - player.width);
+          const zoneTop = canvas.height * (1 - GameSettings.ZONE_HEIGHT_RATIO);
+          const zoneBottom = canvas.height;
+          player.y = clamp(player.y, zoneTop, zoneBottom - player.height);
+        }
+      }
+
+      updateAI();
+
+      // Вычисляем скорости платформ по изменению позиции
+      player.vx = player.x - lastPlayerX;
+      player.vy = player.y - lastPlayerY;
+      ai.vx = ai.x - lastAiX;
+      ai.vy = ai.y - lastAiY;
+
+      updateBall();
+
+      // Запоминаем позиции для следующего кадра
+      lastPlayerX = player.x;
+      lastPlayerY = player.y;
+      lastAiX = ai.x;
+      lastAiY = ai.y;
+
+      // Обновляем частицы (уменьшаем жизнь, удаляем мёртвые)
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].x += particles[i].vx;
+        particles[i].y += particles[i].vy;
+        particles[i].life -= 0.02;
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+
+      // Обновляем искры
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const spark = sparks[i];
+        spark.x += spark.vx;
+        spark.y += spark.vy;
+        spark.vx *= 0.95;
+        spark.vy *= 0.95;
+        spark.life -= spark.fadeSpeed;
+        if (spark.life <= 0) {
+          sparks.splice(i, 1);
+        }
+      }
+    }
+
+    // =====================================================
+    // ФУНКЦИЯ: сброс мяча (пауза перед новым розыгрышем)
+    // =====================================================
+    function resetBall() {
+      ball.active = false;
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height / 2;
+      ball.dx = 5 * (Math.random() > 0.5 ? 1 : -1);
+      ball.dy = -5;
+      ball.spin = 0;
+      ball.speedMult = 1.0;
+      ball.color = '#ffffff';
+      ball.effect = null;
+      ball.trail = [];
+
+      setTimeout(() => {
+        ball.active = true;
+        // Через 1 секунду активируем мяч снова
+      }, 1000);
+    }
+
+    // =====================================================
+    // ФУНКЦИИ ОТРИСОВКИ
+    // =====================================================
+
+    function drawSparks() {
+      sparks.forEach(spark => {
+        ctx.globalAlpha = spark.life * 0.7;
+        ctx.shadowColor = spark.color;
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = spark.color;
+        ctx.beginPath();
+        ctx.arc(spark.x, spark.y, spark.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBall() {
+      // Рисуем след мяча
+      ball.trail.forEach((pos, i) => {
+        const alpha = 0.3 - (i / ball.trail.length) * 0.3;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = ball.color;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, ball.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      // Рисуем частицы
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      const spinStrength = Math.min(1, Math.abs(ball.spin) / 50);
+      const spinDirection = Math.sign(ball.spin);
+
+      ctx.save();
+
+      // Внешнее свечение с учётом вращения
+      ctx.fillStyle = ball.color;
+      ctx.shadowColor = ball.color;
+      ctx.globalAlpha = 0.6 + spinStrength * 0.3;
+      const baseGlowRadius = ball.radius * (1.2 + spinStrength * 0.8);
+      const offsetX = spinDirection * ball.radius * spinStrength * 0.3;
+      ctx.shadowBlur = 25 + spinStrength * 25;
+      ctx.beginPath();
+      ctx.arc(ball.x + offsetX, ball.y, baseGlowRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (spinStrength > 0.3) {
+        ctx.globalAlpha = 0.3 + spinStrength * 0.3;
+        ctx.shadowBlur = 20 + spinStrength * 20;
+        ctx.beginPath();
+        ctx.arc(ball.x + offsetX * 1.5, ball.y, baseGlowRadius * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      ctx.save();
+      ctx.shadowColor = ball.color;
+      ctx.shadowBlur = 25;
+      ctx.fillStyle = ball.color;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Блик на мяче
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ball.x - ball.radius * 0.3, ball.y - ball.radius * 0.3, ball.radius * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+
+      // Дополнительные искры вращения
+      if (Math.abs(ball.spin) > 1.0) {
+        const spinStrength = Math.min(1, Math.abs(ball.spin) / 15);
+        const spinDirection = Math.sign(ball.spin);
+
+        for (let i = 0; i < 3 + Math.floor(spinStrength * 5); i++) {
+          const baseAngle = (i / 3) * Math.PI * 2;
+          const sparkAngle = baseAngle + (spinDirection * (Math.PI / 2));
+          const distance = ball.radius * 1.2;
+
+          const sparkX = ball.x + Math.cos(sparkAngle) * distance;
+          const sparkY = ball.y + Math.sin(sparkAngle) * distance;
+
+          ctx.save();
+          ctx.globalAlpha = 0.6 * spinStrength;
+          ctx.shadowColor = ball.color;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = ball.color;
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 1 + spinStrength * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+
+    // Рисование овальной платформы
+    function drawOvalPlatform(x, y, width, height, curveHeight, color) {
+      if (width <= 0 || height <= 0) return;
+
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = color;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y + height / 2);
+      ctx.bezierCurveTo(x, y, x + width, y, x + width, y + height / 2);
+      ctx.bezierCurveTo(x + width, y + height, x, y + height, x, y + height / 2);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+    }
+
+    // Рисование индикаторов ворот (открытая/закрытая часть)
+    function drawGoalIndicators() {
+      // Ворота игрока (нижние)
+      if (player.active) {
+        const goalWidth = canvas.width;
+        const openingSize = (player.goal.openingPercent / 100) * goalWidth;
+        const activeLeft = (goalWidth - openingSize) / 2;
+        const activeRight = activeLeft + openingSize;
+
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(0, canvas.height - 4, activeLeft, 4);
+        // Левая закрытая часть (синяя — неактивная)
+
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(activeLeft, canvas.height - 4, openingSize, 4);
+        // Открытая часть (серая)
+
+        ctx.fillStyle = '#0096ff';
+        ctx.fillRect(activeRight, canvas.height - 4, canvas.width - activeRight, 4);
+        // Правая закрытая часть
+      }
+
+      // Ворота AI (верхние)
+      if (ai.active) {
+        const goalWidth = canvas.width;
+        const openingSize = (ai.goal.openingPercent / 100) * goalWidth;
+        const activeLeft = (goalWidth - openingSize) / 2;
+        const activeRight = activeLeft + openingSize;
+
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, activeLeft, 4);
+        // Левая закрытая часть
+
+        ctx.fillStyle = GameSettings.GOAL_CONFIG.WALL_COLOR_INACTIVE;
+        ctx.fillRect(activeLeft, 0, openingSize, 4);
+        // Открытая часть
+
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(activeRight, 0, canvas.width - activeRight, 4);
+        // Правая закрытая часть
+      }
+    }
+
+    // Основная функция рисования
+    function draw() {
+      // Очищаем экран чёрным цветом
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Рисуем платформы
+      if (player.active) {
+        drawOvalPlatform(player.x, player.y, player.width, player.height,
+          player.curveHeight, '#0096ff');
+      }
+
+      if (ai.active) {
+        drawOvalPlatform(ai.x, ai.y, ai.width, ai.height,
+          ai.curveHeight, '#ff00ff');
+      }
+
+      drawSparks();
+      drawBall();
+      drawGoalIndicators();
+    }
+
+    // =====================================================
+    // ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ
+    // =====================================================
+    function gameLoop() {
+      frameCounter++;
+      update();  // Обновляем логику игры
+      draw();    // Рисуем кадр
+      requestAnimationFrame(gameLoop);  // Запрашиваем следующий кадр (60 FPS)
+    }
+
+    // Запускаем игру
+    updateScoreDisplay();
+    gameLoop();
+  </script>
+</body>
+
+</html>

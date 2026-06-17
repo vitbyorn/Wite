@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NeonPongFight - ДЕМО</title>
+  <style>
+    body { margin: 0; padding: 0; background: black; overflow: hidden; }
+    canvas { display: block; }
+    #ui { position: fixed; top: 20px; left: 20px; color: white; font-family: monospace; }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">Счёт: <span id="score">0:0</span></div>
+
+<script>
+// ===== ПРОСТЕЙШАЯ НАСТРОЙКА =====
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ===== ПРОСТЫЕ ОБЪЕКТЫ =====
+let ponger = {
+  x: canvas.width/2 - 60,
+  y: canvas.height * 0.85,
+  width: 120,
+  height: 16,
+  color: '#00ffff'
+};
+
+let ai = {
+  x: canvas.width/2 - 60,
+  y: canvas.height * 0.15,
+  width: 120,
+  height: 16,
+  color: '#ff00ff'
+};
+
+let ball = {
+  x: canvas.width/2,
+  y: canvas.height/2,
+  radius: 8,
+  dx: 5,
+  dy: 5,
+  color: '#ffffff'
+};
+
+let score = { player: 0, ai: 0 };
+let mouse = { x: 0, y: 0 };
+
+// ===== ПРОСТОЕ УПРАВЛЕНИЕ =====
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+});
+
+// ===== ПРОСТАЯ ФИЗИКА =====
+function update() {
+  // 1. ПОНГЕР - ПРОСТО СЛЕДУЕТ ЗА МЫШКОЙ
+  ponger.x = mouse.x - ponger.width/2;
+  
+  // Ограничение по краям экрана
+  ponger.x = Math.max(0, Math.min(canvas.width - ponger.width, ponger.x));
+  
+  // 2. ИИ - ПРОСТО СЛЕДУЕТ ЗА ШАРОМ
+  ai.x = ball.x - ai.width/2;
+  ai.x = Math.max(0, Math.min(canvas.width - ai.width, ai.x));
+  
+  // 3. ШАР - ПРОСТО ДВИГАЕТСЯ
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+  
+  // 4. ОТСКОК ОТ СТЕН
+  if (ball.x <= 0 || ball.x >= canvas.width) {
+    ball.dx = -ball.dx;
+  }
+  
+  // 5. ПРОВЕРКА СТОЛКНОВЕНИЙ С ПЛАТФОРМАМИ
+  // С ПОНГЕРОМ
+  if (ball.y + ball.radius >= ponger.y && 
+      ball.y <= ponger.y + ponger.height &&
+      ball.x + ball.radius >= ponger.x && 
+      ball.x - ball.radius <= ponger.x + ponger.width) {
+    
+    // Убрал принудительный отскок вверх: 
+    // ball.dy = -Math.abs(ball.dy); // ← ЭТУ СТРОКУ УДАЛИЛ
+    // Теперь вертикальная скорость просто меняет знак (сохраняя направление физики)
+    ball.dy = -ball.dy;
+    ball.dx = ((ball.x - (ponger.x + ponger.width/2)) / ponger.width) * 10;
+  }
+  
+  // С ИИ
+  if (ball.y - ball.radius <= ai.y + ai.height && 
+      ball.y >= ai.y &&
+      ball.x + ball.radius >= ai.x && 
+      ball.x - ball.radius <= ai.x + ai.width) {
+    
+    ball.dy = Math.abs(ball.dy); // Всегда вниз
+    ball.dx = ((ball.x - (ai.x + ai.width/2)) / ai.width) * 10;
+  }
+  
+  // 6. ГОЛЫ
+  if (ball.y > canvas.height + 50) {
+    score.ai++;
+    resetBall();
+  }
+  
+  if (ball.y < -50) {
+    score.player++;
+    resetBall();
+  }
+  
+  // 7. ОБНОВЛЕНИЕ UI
+  document.getElementById('score').textContent = `${score.player}:${score.ai}`;
+}
+
+function resetBall() {
+  ball.x = canvas.width/2;
+  ball.y = canvas.height/2;
+  ball.dx = (Math.random() > 0.5 ? 1 : -1) * 5;
+  ball.dy = (Math.random() > 0.5 ? 1 : -1) * 5;
+}
+
+// ===== ПРОСТАЯ ОТРИСОВКА =====
+function draw() {
+  // Фон
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Центральная линия
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Зоны
+  const zoneHeight = canvas.height * 0.33;
+  
+  // Верхняя зона (ИИ)
+  ctx.fillStyle = 'rgba(255,0,255,0.05)';
+  ctx.fillRect(0, 0, canvas.width, zoneHeight);
+  
+  // Нижняя зона (Игрок)
+  ctx.fillStyle = 'rgba(0,255,255,0.05)';
+  ctx.fillRect(0, canvas.height - zoneHeight, canvas.width, zoneHeight);
+  
+  // Платформы
+  ctx.fillStyle = ponger.color;
+  ctx.fillRect(ponger.x, ponger.y, ponger.width, ponger.height);
+  
+  ctx.fillStyle = ai.color;
+  ctx.fillRect(ai.x, ai.y, ai.width, ai.height);
+  
+  // Шар
+  ctx.fillStyle = ball.color;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ===== ГЛАВНЫЙ ЦИКЛ =====
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== ЗАПУСК =====
+gameLoop();
+</script>
+</body>
+</html>
