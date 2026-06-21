@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NeonPongFight - ДЕМО</title>
+  <style>
+    body { margin: 0; padding: 0; background: black; overflow: hidden; }
+    canvas { display: block; }
+    #ui { position: fixed; top: 20px; left: 20px; color: white; font-family: monospace; }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">Счёт: <span id="score">0:0</span></div>
+
+<script>
+// ============================================
+// ЗВУКОВОЙ КОНТЕЙНЕР - ОТДЕЛЬНЫЙ МОДУЛЬ
+// ============================================
+class SoundContainer {
+  constructor() {
+    this.audioCtx = null;
+    this.audioReady = false;
+    this.isInitialized = false;
+  }
+
+  // ИНИЦИАЛИЗАЦИЯ
+  init() {
+    try {
+      if (!this.audioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new AudioCtx();
+      }
+      
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+      
+      this.audioReady = (this.audioCtx.state === 'running');
+      this.isInitialized = true;
+      return this.audioReady;
+    } catch (e) {
+      this.audioReady = false;
+      this.isInitialized = false;
+      return false;
+    }
+  }
+
+  // ПРОВЕРКА И ВОССТАНОВЛЕНИЕ
+  ensureRunning() {
+    if (!this.isInitialized) {
+      this.init();
+    }
+    
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
+      this.audioReady = (this.audioCtx.state === 'running');
+    }
+    
+    return this.audioReady;
+  }
+
+  // БАЗОВАЯ ФУНКЦИЯ ВОСПРОИЗВЕДЕНИЯ
+  play(freq, duration, type = 'square', volume = 0.25) {
+    try {
+      if (!this.ensureRunning()) return;
+      if (!this.audioCtx || this.audioCtx.state !== 'running') return;
+
+      const oscillator = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      
+      oscillator.type = type;
+      oscillator.frequency.value = freq;
+      
+      const now = this.audioCtx.currentTime;
+      gain.gain.setValueAtTime(volume * 0.01, now);
+      gain.gain.exponentialRampToValueAtTime(volume, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration - 0.01);
+      
+      oscillator.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+    } catch (e) {
+      // ИГНОРИРУЕМ
+    }
+  }
+
+  // ===== ВСЕ ЗВУКИ ИГРЫ (СОЧНЫЕ 8-БИТНЫЕ) =====
+  soundHitPlayer() { this.play(880, 0.12, 'square', 0.35); }
+  soundHitAI()      { this.play(660, 0.12, 'square', 0.35); }
+  soundWall()       { this.play(440, 0.08, 'square', 0.25); }
+  soundGoalPlayer() { this.play(1200, 0.25, 'square', 0.4); }
+  soundGoalAI()     { this.play(300, 0.25, 'square', 0.4); }
+  soundBoost()      { this.play(1000, 0.15, 'square', 0.3); }
+  soundSlow()       { this.play(280, 0.2, 'square', 0.25); }
+  soundSpin()       { this.play(750, 0.18, 'sawtooth', 0.2); }
+  soundSpark() { 
+    this.play(1400, 0.06, 'square', 0.2);
+    setTimeout(() => this.play(1100, 0.06, 'square', 0.2), 80);
+    setTimeout(() => this.play(800, 0.08, 'square', 0.2), 160);
+  }
+}
+
+// ============================================
+// СОЗДАЕМ ЭКЗЕМПЛЯР КОНТЕЙНЕРА
+// ============================================
+const sound = new SoundContainer();
+
+// ============================================
+// НАСТРОЙКА ИГРЫ
+// ============================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ===== ЗОНЫ (ГРАНИЦЫ ДВИЖЕНИЯ ПЛАТФОРМ) =====
+const zones = {
+  player: {
+    minY: canvas.height * 0.6,
+    maxY: canvas.height - 16
+  },
+  ai: {
+    minY: 0,
+    maxY: canvas.height * 0.4 - 16
+  }
+};
+
+// ===== ОБЪЕКТЫ =====
+let ponger = {
+  x: canvas.width/2 - 60,
+  y: canvas.height - 70,
+  width: 120,
+  height: 16,
+  color: '#00ffff'
+};
+
+let ai = {
+  x: canvas.width/2 - 60,
+  y: 70,
+  width: 120,
+  height: 16,
+  color: '#ff00ff'
+};
+
+let ball = {
+  x: canvas.width/2,
+  y: canvas.height/2,
+  radius: 8,
+  dx: 5,
+  dy: 5,
+  color: '#ffffff'
+};
+
+let score = { player: 0, ai: 0 };
+let mouse = { x: 0, y: 0 };
+
+// ===== УПРАВЛЕНИЕ =====
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  sound.init();
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+  sound.init();
+});
+
+canvas.addEventListener('click', () => sound.init());
+canvas.addEventListener('touchstart', () => sound.init());
+document.addEventListener('click', () => sound.init());
+document.addEventListener('touchstart', () => sound.init());
+document.addEventListener('keydown', () => sound.init());
+
+// ПЕРИОДИЧЕСКАЯ ПРОВЕРКА СОСТОЯНИЯ
+setInterval(() => {
+  if (sound.audioCtx && sound.audioCtx.state === 'suspended') {
+    sound.audioCtx.resume();
+    sound.audioReady = (sound.audioCtx.state === 'running');
+  }
+}, 5000);
+
+// ===== ФУНКЦИЯ ОБНОВЛЕНИЯ ЗОН (при изменении экрана) =====
+function updateZones() {
+  zones.player.minY = canvas.height * 0.6;
+  zones.player.maxY = canvas.height - 16;
+  zones.ai.minY = 0;
+  zones.ai.maxY = canvas.height * 0.4 - 16;
+}
+
+// ===== ИЗМЕНЕНИЕ РАЗМЕРА ЭКРАНА =====
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  updateZones();
+}
+
+window.addEventListener('resize', resize);
+
+// Флаги для однократного звука при столкновении
+let lastHitPlayer = false;
+let lastHitAI = false;
+let lastWallX = false;
+let lastWallY = false;
+
+// ===== ФИЗИКА =====
+function update() {
+  // 1. ПОНГЕР
+  ponger.x = mouse.x - ponger.width/2;
+  ponger.x = Math.max(0, Math.min(canvas.width - ponger.width, ponger.x));
+  
+  let targetY = mouse.y - 40;
+  ponger.y = Math.max(zones.player.minY, Math.min(zones.player.maxY, targetY));
+  
+  // 2. ИИ
+  ai.x = ball.x - ai.width/2;
+  ai.x = Math.max(0, Math.min(canvas.width - ai.width, ai.x));
+  ai.y = Math.max(zones.ai.minY, Math.min(zones.ai.maxY, ball.y));
+  
+  // 3. ДВИЖЕНИЕ МЯЧА
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+  
+  // 4. ОТСКОК ОТ СТЕН (по X)
+  if (ball.x <= 0 || ball.x >= canvas.width) {
+    if (!lastWallX) {
+      sound.soundWall();
+      lastWallX = true;
+    }
+    ball.dx = -ball.dx;
+  } else {
+    lastWallX = false;
+  }
+  
+  // 5. СТОЛКНОВЕНИЕ С ПОНГЕРОМ (ИГРОК)
+  if (ball.y + ball.radius >= ponger.y && 
+      ball.y <= ponger.y + ponger.height &&
+      ball.x + ball.radius >= ponger.x && 
+      ball.x - ball.radius <= ponger.x + ponger.width) {
+    
+    if (!lastHitPlayer) {
+      sound.soundHitPlayer();
+      lastHitPlayer = true;
+    }
+    ball.dy = -ball.dy;
+    ball.dx = ((ball.x - (ponger.x + ponger.width/2)) / ponger.width) * 10;
+  } else {
+    lastHitPlayer = false;
+  }
+  
+  // 6. СТОЛКНОВЕНИЕ С AI (ПРОТИВНИК)
+  if (ball.y - ball.radius <= ai.y + ai.height && 
+      ball.y >= ai.y &&
+      ball.x + ball.radius >= ai.x && 
+      ball.x - ball.radius <= ai.x + ai.width) {
+    
+    if (!lastHitAI) {
+      sound.soundHitAI();
+      lastHitAI = true;
+    }
+    ball.dy = -ball.dy;
+    ball.dx = ((ball.x - (ai.x + ai.width/2)) / ai.width) * 10;
+  } else {
+    lastHitAI = false;
+  }
+  
+  // 7. ГОЛЫ
+  if (ball.y > canvas.height + 50) {
+    score.ai++;
+    sound.soundGoalAI();
+    resetBall();
+  }
+  if (ball.y < -50) {
+    score.player++;
+    sound.soundGoalPlayer();
+    resetBall();
+  }
+  
+  document.getElementById('score').textContent = `${score.player}:${score.ai}`;
+}
+
+function resetBall() {
+  ball.x = canvas.width/2;
+  ball.y = canvas.height/2;
+  ball.dx = (Math.random() > 0.5 ? 1 : -1) * 5;
+  ball.dy = (Math.random() > 0.5 ? 1 : -1) * 5;
+  lastHitPlayer = false;
+  lastHitAI = false;
+  lastWallX = false;
+  lastWallY = false;
+}
+
+// ===== ОТРИСОВКА =====
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  const zoneHeight = zones.player.minY;
+  ctx.fillStyle = 'rgba(255,0,255,0.05)';
+  ctx.fillRect(0, 0, canvas.width, zoneHeight);
+  ctx.fillStyle = 'rgba(0,255,255,0.05)';
+  ctx.fillRect(0, canvas.height - zoneHeight, canvas.width, zoneHeight);
+  
+  ctx.fillStyle = ponger.color;
+  ctx.fillRect(ponger.x, ponger.y, ponger.width, ponger.height);
+  ctx.fillStyle = ai.color;
+  ctx.fillRect(ai.x, ai.y, ai.width, ai.height);
+  
+  ctx.fillStyle = ball.color;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ===== ЦИКЛ =====
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
