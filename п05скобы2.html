@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NeonPongFight - ДЕМО</title>
+  <style>
+    body { margin: 0; padding: 0; background: black; overflow: hidden; }
+    canvas { display: block; }
+    #ui { position: fixed; top: 20px; left: 20px; color: white; font-family: monospace; }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">Счёт: <span id="score">0:0</span></div>
+
+<script>
+// ============================================================
+//  МОДУЛЬ ФИЗИКИ МЯЧА - НЕЗАВИСИМЫЙ, ВЗАИМОЗАМЕНЯЕМЫЙ
+//  Реализует школьную физику: угол падения = угол отражения
+//  Внутреннее состояние полностью изолировано
+// ============================================================
+const BallPhysics = (function() {
+  // --- КОНФИГУРАЦИЯ ---
+  const config = {
+    radius: 8,
+    color: '#ffffff',
+    speed: 5,
+    maxSpeed: 12
+  };
+
+  // --- СОСТОЯНИЕ (скрыто) ---
+  let ball = { x: 0, y: 0, dx: 5, dy: 5 };
+
+  // --- УСТАНОВКА ПОЗИЦИИ ---
+  function setPosition(x, y) {
+    ball.x = x;
+    ball.y = y;
+  }
+
+  // --- УСТАНОВКА СКОРОСТИ ---
+  function setSpeed(dx, dy) {
+    ball.dx = dx;
+    ball.dy = dy;
+  }
+
+  // --- ПОЛУЧЕНИЕ ДАННЫХ ---
+  function getBall() { return ball; }
+  function getRadius() { return config.radius; }
+  function getColor() { return config.color; }
+
+  // --- ДВИЖЕНИЕ ---
+  function move() {
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+  }
+
+  // --- ОТРАЖЕНИЕ ОТ ПЛОСКОЙ ПОВЕРХНОСТИ (общая формула) ---
+  // normalX, normalY — нормаль к поверхности (перпендикуляр)
+  // Например: (0, -1) для горизонтальной поверхности сверху
+  //           (0, 1)  для горизонтальной поверхности снизу
+  function reflect(normalX, normalY) {
+    // Скалярное произведение вектора скорости и нормали
+    let dot = ball.dx * normalX + ball.dy * normalY;
+    // Отражённый вектор: V = V - 2 * (V · N) * N
+    ball.dx = ball.dx - 2 * dot * normalX;
+    ball.dy = ball.dy - 2 * dot * normalY;
+  }
+
+  // --- ОТРАЖЕНИЕ ОТ ИЗОГНУТОЙ ПОВЕРХНОСТИ (СКОБКИ) ---
+  // В точке удара вычисляем нормаль к поверхности скобки
+  function reflectFromCurve(platformX, platformY, platformWidth, platformHeight, amplitude, isPlayer) {
+    // Позиция удара относительно центра платформы (-0.5 .. 0.5)
+    let hitPos = (ball.x - (platformX + platformWidth/2)) / platformWidth;
+    // Угол наклона поверхности в точке удара
+    // Для скобки: производная от quadraticCurveTo (аппроксимация)
+    let angle = hitPos * Math.PI / 2.5;
+    
+    // Вычисляем нормаль к поверхности
+    let normalX = Math.sin(angle);
+    let normalY;
+    if (isPlayer) {
+      // Платформа игрока (снизу) — нормаль направлена вверх
+      normalY = -Math.cos(angle);
+    } else {
+      // Платформа AI (сверху) — нормаль направлена вниз
+      normalY = Math.cos(angle);
+    }
+    
+    // Применяем отражение
+    reflect(normalX, normalY);
+    
+    // Корректируем позицию мяча, чтобы он не застрял
+    if (isPlayer) {
+      ball.y = platformY - config.radius;
+    } else {
+      ball.y = platformY + platformHeight + config.radius;
+    }
+  }
+
+  // --- ОТРАЖЕНИЕ ОТ СТЕН ---
+  function reflectWallX() {
+    ball.dx = -ball.dx;
+  }
+
+  function reflectWallY() {
+    ball.dy = -ball.dy;
+  }
+
+  // --- СБРОС В ЦЕНТР ---
+  function reset(canvasWidth, canvasHeight) {
+    ball.x = canvasWidth / 2;
+    ball.y = canvasHeight / 2;
+    let angle = (Math.random() - 0.5) * Math.PI / 2;
+    ball.dx = Math.sin(angle) * config.speed;
+    ball.dy = (Math.random() > 0.5 ? 1 : -1) * Math.cos(angle) * config.speed;
+  }
+
+  // --- ПРОВЕРКА СТОЛКНОВЕНИЯ С ПРЯМОУГОЛЬНИКОМ ---
+  function checkCollisionRect(rect) {
+    return ball.x + config.radius >= rect.x &&
+           ball.x - config.radius <= rect.x + rect.width &&
+           ball.y + config.radius >= rect.y &&
+           ball.y - config.radius <= rect.y + rect.height;
+  }
+
+  // --- ОТРИСОВКА ---
+  function draw(ctx) {
+    ctx.fillStyle = config.color;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, config.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- ПУБЛИЧНОЕ API ---
+  return {
+    config: config,
+    getBall: getBall,
+    getRadius: getRadius,
+    getColor: getColor,
+    setPosition: setPosition,
+    setSpeed: setSpeed,
+    move: move,
+    reflect: reflect,
+    reflectFromCurve: reflectFromCurve,
+    reflectWallX: reflectWallX,
+    reflectWallY: reflectWallY,
+    reset: reset,
+    checkCollisionRect: checkCollisionRect,
+    draw: draw
+  };
+})();
+
+// ============================================================
+//  МОДУЛЬ ПЛАТФОРМ - НЕЗАВИСИМЫЙ, ВЗАИМОЗАМЕНЯЕМЫЙ
+//  Всё что связано с платформами - здесь
+// ============================================================
+const PlatformModule = (function() {
+  // Конфигурация
+  const config = {
+    width: 120,
+    height: 20,
+    amplitude: 12,
+    colorPlayer: '#00ffff',
+    colorAI: '#ff00ff'
+  };
+
+  // Состояние
+  let player = { x: 0, y: 0 };
+  let ai = { x: 0, y: 0 };
+
+  // Установка позиций (вызывается из игры)
+  function setPositions(playerX, playerY, aiX, aiY) {
+    player.x = playerX;
+    player.y = playerY;
+    ai.x = aiX;
+    ai.y = aiY;
+  }
+
+  // Получение прямоугольников для физики
+  function getPlayerRect() {
+    return {
+      x: player.x,
+      y: player.y,
+      width: config.width,
+      height: config.height
+    };
+  }
+
+  function getAIRect() {
+    return {
+      x: ai.x,
+      y: ai.y,
+      width: config.width,
+      height: config.height
+    };
+  }
+
+  // Получение данных платформ
+  function getPlayer() { return player; }
+  function getAI() { return ai; }
+
+  // Отрисовка скобок
+  function draw(ctx) {
+    const amplitude = config.amplitude;
+    
+    // === Верхняя платформа (AI) - скобка ) ===
+    const leftY = ai.y + config.height - amplitude;
+    const centerY = ai.y + config.height + amplitude;
+    const rightY = ai.y + config.height - amplitude;
+    
+    ctx.beginPath();
+    ctx.moveTo(ai.x, leftY);
+    ctx.quadraticCurveTo(ai.x + config.width/2, centerY, ai.x + config.width, rightY);
+    ctx.strokeStyle = config.colorAI;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    // === Нижняя платформа (игрок) - скобка ( ===
+    const leftY2 = player.y + amplitude;
+    const centerY2 = player.y - amplitude;
+    const rightY2 = player.y + amplitude;
+    
+    ctx.beginPath();
+    ctx.moveTo(player.x, leftY2);
+    ctx.quadraticCurveTo(player.x + config.width/2, centerY2, player.x + config.width, rightY2);
+    ctx.strokeStyle = config.colorPlayer;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // Публичное API
+  return {
+    config: config,
+    setPositions: setPositions,
+    getPlayerRect: getPlayerRect,
+    getAIRect: getAIRect,
+    getPlayer: getPlayer,
+    getAI: getAI,
+    draw: draw
+  };
+})();
+// ================================================================
+//  МОДУЛЬ ЗВУКА - НЕЗАВИСИМЫЙ, ВЗАИМОЗАМЕНЯЕМЫЙ
+//  Полностью изолирован, можно заменить на любой другой
+// ================================================================
+class SoundEngine {
+  constructor() {
+    this.audioCtx = null;
+    this.ready = false;
+    this.initialized = false;
+  }
+
+  // --- ИНИЦИАЛИЗАЦИЯ (вызывать при клике/таче) ---
+  init() {
+    try {
+      if (!this.audioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new AudioCtx();
+      }
+      if (this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume();
+      }
+      this.ready = (this.audioCtx.state === 'running');
+      this.initialized = true;
+      return this.ready;
+    } catch (e) {
+      console.warn('SoundEngine: ошибка инициализации', e);
+      this.ready = false;
+      this.initialized = false;
+      return false;
+    }
+  }
+
+  // --- ПРИНУДИТЕЛЬНОЕ ВОССТАНОВЛЕНИЕ ---
+  ensureRunning() {
+    if (!this.initialized) {
+      return this.init();
+    }
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      try {
+        this.audioCtx.resume();
+        this.ready = (this.audioCtx.state === 'running');
+      } catch (e) {
+        this.ready = false;
+      }
+    }
+    return this.ready;
+  }
+
+  // --- БАЗОВОЕ ВОСПРОИЗВЕДЕНИЕ (БЕЗ ЗАТУХАНИЯ) ---
+  play(freq, duration, type = 'square', volume = 0.25) {
+    try {
+      if (!this.ensureRunning()) return;
+      if (!this.audioCtx || this.audioCtx.state !== 'running') return;
+
+      const oscillator = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      
+      oscillator.type = type;
+      oscillator.frequency.value = freq;
+      
+      const now = this.audioCtx.currentTime;
+      
+      // БЕЗ ЗАТУХАНИЯ — громкость устанавливается один раз
+      gain.gain.setValueAtTime(volume, now);
+      // НЕТ exponentialRampToValueAtTime — звук резко обрывается
+      
+      oscillator.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+    } catch (e) {
+      // Тихо игнорируем ошибки
+    }
+  }
+
+  // --- ВСЕ ЗВУКИ ИГРЫ ---
+  hitPlayer() { this.play(880, 0.12, 'square', 0.35); }   // "Бац!"
+  hitAI()      { this.play(660, 0.12, 'square', 0.35); }   // "Боц!"
+  wall()       { this.play(440, 0.08, 'square', 0.25); }   // "Тык!"
+  goalPlayer() { this.play(1200, 0.25, 'square', 0.4); }   // "Дзынь!"
+  goalAI()     { this.play(300, 0.25, 'square', 0.4); }    // "Пыщ!"
+  boost()      { this.play(1000, 0.15, 'square', 0.3); }   // "Вау!"
+  slow()       { this.play(280, 0.2, 'square', 0.25); }    // "Вух!"
+  spin()       { this.play(750, 0.18, 'sawtooth', 0.2); }  // "Вжжик"
+  
+  spark() {
+    this.play(1400, 0.06, 'square', 0.2);
+    setTimeout(() => this.play(1100, 0.06, 'square', 0.2), 80);
+    setTimeout(() => this.play(800, 0.08, 'square', 0.2), 160);
+  }
+
+  // --- ДОПОЛНИТЕЛЬНЫЕ ЗВУКИ ---
+  click() { this.play(600, 0.06, 'square', 0.15); }
+  beep()  { this.play(800, 0.1, 'square', 0.2); }
+  victory() {
+    this.play(523, 0.1, 'square', 0.3);
+    setTimeout(() => this.play(659, 0.1, 'square', 0.3), 100);
+    setTimeout(() => this.play(784, 0.15, 'square', 0.35), 200);
+  }
+  defeat() {
+    this.play(784, 0.1, 'square', 0.3);
+    setTimeout(() => this.play(659, 0.1, 'square', 0.3), 100);
+    setTimeout(() => this.play(523, 0.15, 'square', 0.35), 200);
+  }
+
+  // --- СТАТУС ---
+  getStatus() {
+    return {
+      ready: this.ready,
+      state: this.audioCtx ? this.audioCtx.state : 'none',
+      initialized: this.initialized
+    };
+  }
+
+  // --- СБРОС ---
+  reset() {
+    try {
+      if (this.audioCtx) {
+        this.audioCtx.close();
+      }
+    } catch (e) {}
+    this.audioCtx = null;
+    this.ready = false;
+    this.initialized = false;
+    return this.init();
+  }
+}
+// === СОЗДАЁМ ЭКЗЕМПЛЯР ЗВУКА ===
+const sound = new SoundEngine();
+
+// ============================================================
+//  ОСНОВНАЯ ИГРА
+// ============================================================
+// === ФУНКЦИИ-ОБЁРТКИ ДЛЯ СОВМЕСТИМОСТИ ===
+// Чтобы не переписывать вызовы в игре
+function hitPlayer() { sound.hitPlayer(); }
+function hitAI() { sound.hitAI(); }
+function hitWall() { sound.wall(); }
+function goalPlayer() { sound.goalPlayer(); }
+function goalAI() { sound.goalAI(); }
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const zones = {
+  player: { minY: canvas.height * 0.6, maxY: canvas.height - 16 },
+  ai: { minY: 0, maxY: canvas.height * 0.4 - 16 }
+};
+
+let score = { player: 0, ai: 0 };
+let mouse = { x: 0, y: 0 };
+let goalScored = false;
+
+function initSound() {
+  sound.init();
+  sound.ensureRunning();
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  initSound();  // ← так
+});
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+  initSound();  // ← ИСПРАВЛЕНО
+});
+
+canvas.addEventListener('click', initSound);  // ← ИСПРАВЛЕНО
+canvas.addEventListener('touchstart', initSound);  // ← ИСПРАВЛЕНО
+document.addEventListener('click', initSound);  // ← ИСПРАВЛЕНО
+document.addEventListener('touchstart', initSound);  // ← ИСПРАВЛЕНО
+document.addEventListener('keydown', initSound);  // ← ИСПРАВЛЕНО
+
+setInterval(() => {
+  if (sound.audioCtx && sound.audioCtx.state === 'suspended') {
+    sound.ensureRunning();
+  }
+}, 5000);
+
+function updateZones() {
+  zones.player.minY = canvas.height * 0.5;
+  zones.player.maxY = canvas.height - 16;
+  zones.ai.minY = 0;
+  zones.ai.maxY = canvas.height * 0.5 - 16;
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  updateZones();
+}
+
+window.addEventListener('resize', resize);
+
+let lastHitPlayer = false;
+let lastHitAI = false;
+let lastWallX = false;
+let lastWallY = false;
+
+function update() {
+  // === ПОЗИЦИИ ПЛАТФОРМ ===
+  const playerX = mouse.x - PlatformModule.config.width/2;
+  const playerXClamped = Math.max(0, Math.min(canvas.width - PlatformModule.config.width, playerX));
+  const targetY = mouse.y - 40;
+  const playerY = Math.max(zones.player.minY, Math.min(zones.player.maxY, targetY));
+  
+  const aiX = BallPhysics.getBall().x - PlatformModule.config.width/2;
+  const aiXClamped = Math.max(0, Math.min(canvas.width - PlatformModule.config.width, aiX));
+  const aiY = Math.max(zones.ai.minY, Math.min(zones.ai.maxY, BallPhysics.getBall().y));
+  
+  PlatformModule.setPositions(playerXClamped, playerY, aiXClamped, aiY);
+  
+  const ponger = PlatformModule.getPlayerRect();
+  const ai = PlatformModule.getAIRect();
+  
+  // === ДВИЖЕНИЕ МЯЧА (через модуль физики) ===
+  BallPhysics.move();
+  
+  // === ОТСКОК ОТ СТЕН (по X) ===
+  const ballData = BallPhysics.getBall();
+  if (ballData.x <= 0 || ballData.x >= canvas.width) {
+    if (!lastWallX) {
+      hitWall();
+      lastWallX = true;
+    }
+    BallPhysics.reflectWallX();
+  } else {
+    lastWallX = false;
+  }
+  
+  // === СТОЛКНОВЕНИЕ С ИГРОКОМ (угловая физика через модуль) ===
+  if (BallPhysics.checkCollisionRect(ponger)) {
+    if (!lastHitPlayer) {
+      hitPlayer();
+      lastHitPlayer = true;
+    }
+    // Отражение от изогнутой поверхности скобки
+    BallPhysics.reflectFromCurve(
+      playerXClamped, playerY,
+      PlatformModule.config.width,
+      PlatformModule.config.height,
+      PlatformModule.config.amplitude,
+      true
+    );
+  } else {
+    lastHitPlayer = false;
+  }
+  
+  // === СТОЛКНОВЕНИЕ С AI (угловая физика через модуль) ===
+  if (BallPhysics.checkCollisionRect(ai)) {
+    if (!lastHitAI) {
+      hitAI();
+      lastHitAI = true;
+    }
+    BallPhysics.reflectFromCurve(
+      aiXClamped, aiY,
+      PlatformModule.config.width,
+      PlatformModule.config.height,
+      PlatformModule.config.amplitude,
+      false
+    );
+  } else {
+    lastHitAI = false;
+  }
+  
+  // === ГОЛЫ ===
+  if (ballData.y < -50 && !goalScored) {
+    goalScored = true;
+    score.player++;
+    sound.ensureRunning();
+    goalPlayer();
+    setTimeout(() => {
+      BallPhysics.reset(canvas.width, canvas.height);
+      goalScored = false;
+    }, 80);
+  }
+  
+  if (ballData.y > canvas.height + 50 && !goalScored) {
+    goalScored = true;
+    score.ai++;
+    sound.ensureRunning();
+    goalAI();
+    setTimeout(() => {
+      BallPhysics.reset(canvas.width, canvas.height);
+      goalScored = false;
+    }, 80);
+  }
+  
+  document.getElementById('score').textContent = `${score.player}:${score.ai}`;
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  const zoneHeight = zones.player.minY;
+  ctx.fillStyle = 'rgba(255,0,255,0.05)';
+  ctx.fillRect(0, 0, canvas.width, zoneHeight);
+  ctx.fillStyle = 'rgba(0,255,255,0.05)';
+  ctx.fillRect(0, canvas.height - zoneHeight, canvas.width, zoneHeight);
+  
+  // === ОТРИСОВКА ПЛАТФОРМ (через модуль) ===
+  PlatformModule.draw(ctx);
+  
+  // === ОТРИСОВКА МЯЧА (через модуль физики) ===
+  BallPhysics.draw(ctx);
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// === ИНИЦИАЛИЗАЦИЯ ===
+// Устанавливаем начальную позицию мяча
+BallPhysics.reset(canvas.width, canvas.height);
+
+gameLoop();
+
+setTimeout(() => {
+  sound.init();
+sound.ensureRunning();
+}, 100);
+</script>
+</body>
+</html>

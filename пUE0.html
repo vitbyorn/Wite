@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NeonPongFight - ДЕМО</title>
+  <style>
+    body { margin: 0; padding: 0; background: black; overflow: hidden; }
+    canvas { display: block; }
+    #ui { 
+      position: fixed; 
+      top: 20px; 
+      left: 20px; 
+      color: white; 
+      font-family: monospace;
+      font-size: 18px;
+      text-shadow: 0 0 10px #0ff;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 10px;
+      z-index: 100;
+    }
+    #comic {
+      position: fixed;
+      pointer-events: none;
+      font-family: Impact, sans-serif;
+      font-size: 60px;
+      color: #ff0;
+      text-shadow: 3px 3px 0 #f00;
+      opacity: 0;
+      z-index: 1000;
+      text-align: center;
+      width: 100%;
+      top: 40%;
+      transform: translateY(-50%);
+      transition: all 0.3s;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">⚡ <span id="score">0:0</span> | 🌀 <span id="spin">0</span> | 🎯 <span id="bonus">—</span></div>
+<div id="comic">БЗЗЗТ!</div>
+
+<script>
+// ===== НАСТРОЙКА =====
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const scoreEl = document.getElementById('score');
+const spinEl = document.getElementById('spin');
+const bonusEl = document.getElementById('bonus');
+const comicEl = document.getElementById('comic');
+
+// ===== КОНСТАНТЫ =====
+const ZONE_HEIGHT = canvas.height * 0.33;
+
+// ===== ОБЪЕКТЫ =====
+let ponger = {
+  x: canvas.width/2 - 60,
+  y: canvas.height * 0.85,
+  width: 120,
+  height: 16,
+  color: '#00ffff',
+  lastX: canvas.width/2 - 60,
+  spinPower: 0
+};
+
+let ai = {
+  x: canvas.width/2 - 60,
+  y: canvas.height * 0.15,
+  width: 120,
+  height: 16,
+  color: '#ff00ff'
+};
+
+// ===== ШАР =====
+let ball = {
+  x: canvas.width/2,
+  y: canvas.height/2,
+  radius: 10,
+  dx: 5,
+  dy: 5,
+  color: '#ffffff',
+  trail: [],
+  spin: 0,
+  baseSpeed: 3,
+  currentSpeed: 5,
+  trailLength: 11
+};
+
+let score = { player: 0, ai: 0 };
+let mouse = { x: canvas.width/2, y: canvas.height/2 };
+
+// ===== ЭФФЕКТЫ =====
+let particles = [];
+let bibs = [];
+let bibsCollected = 0;
+
+const BIB_TYPES = [
+  { name: 'БЕГЛЕЦ', color: '#ff5555', speed: 3, bonus: 'split', symbol: '🏃' },
+  { name: 'ХАОТ', color: '#ffff55', speed: 2, bonus: 'heavy', symbol: '🌀' },
+  { name: 'ПОСЛУШНИК', color: '#55ffff', speed: 2, bonus: 'light', symbol: '👁' }
+];
+
+// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+function showComic(text) {
+  comicEl.textContent = text;
+  comicEl.style.opacity = 1;
+  comicEl.style.transform = 'translateY(-50%) scale(1.8)';
+  setTimeout(() => {
+    comicEl.style.opacity = 0;
+    comicEl.style.transform = 'translateY(-50%) scale(1)';
+  }, 500);
+}
+
+function createParticles(x, y, color, count = 8) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8,
+      radius: Math.random() * 3 + 1,
+      color,
+      life: 1.0
+    });
+  }
+}
+
+function spawnBib() {
+  if (bibs.length >= 4) return;
+  const type = BIB_TYPES[Math.floor(Math.random() * BIB_TYPES.length)];
+  const side = Math.floor(Math.random() * 4);
+  let x, y, vx, vy;
+  
+  switch(side) {
+    case 0: x = -20; y = Math.random() * canvas.height; vx = type.speed; vy = 0; break;
+    case 1: x = canvas.width + 20; y = Math.random() * canvas.height; vx = -type.speed; vy = 0; break;
+    case 2: x = Math.random() * canvas.width; y = -20; vx = 0; vy = type.speed; break;
+    case 3: x = Math.random() * canvas.width; y = canvas.height + 20; vx = 0; vy = -type.speed; break;
+  }
+  
+  bibs.push({
+    x, y, vx, vy,
+    radius: 14,
+    color: type.color,
+    name: type.name,
+    symbol: type.symbol,
+    bonus: type.bonus,
+    life: 3000,
+    pulse: 0
+  });
+}
+
+function applyBonus(bonusType) {
+  const names = { split: 'РАЗДВОЕНИЕ', heavy: 'ТЯЖЁЛЫЙ', light: 'ЛЁГКИЙ' };
+  bonusEl.textContent = names[bonusType] || '—';
+  
+  switch(bonusType) {
+    case 'split':
+      ball.color = '#ff00ff';
+      setTimeout(() => { ball.color = '#ffffff'; bonusEl.textContent = '—'; }, 3000);
+      break;
+    case 'heavy':
+      ball.baseSpeed *= 0.5;
+      ball.color = '#ff9900';
+      setTimeout(() => { ball.baseSpeed = 5; ball.color = '#ffffff'; bonusEl.textContent = '—'; }, 4000);
+      break;
+    case 'light':
+      ball.baseSpeed *= 1.8;
+      ball.color = '#00ffff';
+      setTimeout(() => { ball.baseSpeed = 5; ball.color = '#ffffff'; bonusEl.textContent = '—'; }, 3000);
+      break;
+  }
+}
+
+// ===== УПРАВЛЕНИЕ =====
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+}, { passive: false });
+
+// ===== ФИЗИКА =====
+function update() {
+  // 1. ПОНГЕР - СЛЕДУЕТ ЗА МЫШКОЙ
+  ponger.x = mouse.x - ponger.width/2;
+  ponger.x = Math.max(0, Math.min(canvas.width - ponger.width, ponger.x));
+  
+  ponger.spinPower = (ponger.x - ponger.lastX) * 0.3;
+  ponger.lastX = ponger.x;
+  
+  // 2. ИИ - СЛЕДУЕТ ЗА ШАРОМ
+  ai.x = ball.x - ai.width/2;
+  ai.x = Math.max(0, Math.min(canvas.width - ai.width, ai.x));
+  
+  // === ХВОСТ КОМЕТЫ ===
+  ball.trail.unshift({ x: ball.x, y: ball.y, color: ball.color, size: ball.radius * 0.9 });
+  if (ball.trail.length > ball.trailLength) {
+    ball.trail.pop();
+  }
+  
+  // 3. ДВИЖЕНИЕ ШАРА
+  const speedMult = ball.currentSpeed / ball.baseSpeed;
+  ball.x += (ball.dx + ball.spin * 0.2) * speedMult;
+  ball.y += ball.dy * speedMult;
+  
+  // Затухание спина
+  ball.spin *= 0.99;
+  
+  // 4. ОТСКОК ОТ СТЕН
+  if (ball.x <= 0) {
+    ball.x = 0;
+    ball.dx = Math.abs(ball.dx);
+    showComic('БДЫЩ!');
+  } else if (ball.x >= canvas.width) {
+    ball.x = canvas.width;
+    ball.dx = -Math.abs(ball.dx);
+    showComic('БДЫЩ!');
+  }
+  
+  // 5. ПРОВЕРКА СТОЛКНОВЕНИЙ С ПЛАТФОРМАМИ
+  // С ПОНГЕРОМ (НИЖНЯЯ ПЛАТФОРМА)
+  if (ball.y + ball.radius >= ponger.y && 
+      ball.y <= ponger.y + ponger.height &&
+      ball.x + ball.radius >= ponger.x && 
+      ball.x - ball.radius <= ponger.x + ponger.width &&
+      ball.dy > 0) {
+    
+    ball.y = ponger.y - ball.radius - 1;
+    ball.dy = -Math.abs(ball.dy);
+    
+    // СПИН
+    ball.spin = ponger.spinPower;
+    ball.dx += ponger.spinPower * 10;
+    
+    // УДАРНАЯ ВОЛНА
+    if (Math.abs(ponger.spinPower) > 2) {
+      ball.dy *= 1.2;
+      showComic('ВЖУХ!');
+      createParticles(ball.x, ball.y, ponger.color, 15);
+    }
+    
+    createParticles(ball.x, ball.y, ponger.color, 6);
+    showComic(['БАМ!', 'ТЫК!', 'БДЫЩ!'][Math.floor(Math.random() * 3)]);
+  }
+  
+  // С ИИ (ВЕРХНЯЯ ПЛАТФОРМА)
+  if (ball.y - ball.radius <= ai.y + ai.height && 
+      ball.y >= ai.y &&
+      ball.x + ball.radius >= ai.x && 
+      ball.x - ball.radius <= ai.x + ai.width &&
+      ball.dy < 0) {
+    
+    ball.y = ai.y + ai.height + ball.radius + 1;
+    ball.dy = Math.abs(ball.dy);
+    createParticles(ball.x, ball.y, ai.color, 6);
+  }
+  
+  // 6. ГОЛЫ
+  if (ball.y > canvas.height + 50) {
+    score.ai++;
+    resetBall();
+    showComic('ГОЛ ИИ!');
+  } else if (ball.y < -50) {
+    score.player++;
+    resetBall();
+    showComic('ГОЛ!');
+  }
+  
+  // 7. БИБЫ
+  for (let i = bibs.length - 1; i >= 0; i--) {
+    const bib = bibs[i];
+    bib.x += bib.vx;
+    bib.y += bib.vy;
+    bib.life -= 16;
+    bib.pulse += 0.05;
+    
+    const dx = ball.x - bib.x;
+    const dy = ball.y - bib.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist < ball.radius + bib.radius) {
+      bibsCollected++;
+      createParticles(bib.x, bib.y, bib.color, 15);
+      showComic(['БЗЗЗТ!', 'ПИУ!', 'ВЖУХ!'][Math.floor(Math.random() * 3)]);
+      applyBonus(bib.bonus);
+      bibs.splice(i, 1);
+      continue;
+    }
+    
+    if (bib.life <= 0 || bib.x < -50 || bib.x > canvas.width + 50 || 
+        bib.y < -50 || bib.y > canvas.height + 50) {
+      bibs.splice(i, 1);
+    }
+  }
+  
+  // Спавн бибов
+  if (Math.random() < 0.007 && bibs.length < 4) {
+    spawnBib();
+  }
+  
+  // 8. ЧАСТИЦЫ
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].x += particles[i].vx;
+    particles[i].y += particles[i].vy;
+    particles[i].life -= 0.03;
+    if (particles[i].life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+  
+  // 9. ОБНОВЛЕНИЕ UI
+  scoreEl.textContent = `${score.player}:${score.ai}`;
+  spinEl.textContent = Math.round(ball.spin * 10) / 10;
+}
+
+function resetBall() {
+  ball.x = canvas.width/2;
+  ball.y = canvas.height/2;
+  ball.dx = (Math.random() > 0.5 ? 1 : -1) * 5;
+  ball.dy = (Math.random() > 0.5 ? 1 : -1) * 5;
+  ball.trail = [];
+  ball.spin = 0;
+  ball.color = '#ffffff';
+  ball.currentSpeed = ball.baseSpeed;
+}
+
+// ===== ОТРИСОВКА =====
+function draw() {
+  // Фон
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Сетка
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for (let i = 50; i < canvas.width; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 50; i < canvas.height; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+  
+  // Центральная линия
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.setLineDash([15, 15]);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // === ЗОНЫ ИГРОКОВ ===
+  // Верхняя зона (ИИ)
+  ctx.fillStyle = 'rgba(255,0,255,0.07)';
+  ctx.fillRect(0, 0, canvas.width, ZONE_HEIGHT);
+  
+  // Нижняя зона (Игрок)
+  ctx.fillStyle = 'rgba(0,255,255,0.07)';
+  ctx.fillRect(0, canvas.height - ZONE_HEIGHT, canvas.width, ZONE_HEIGHT);
+  
+  // === ХВОСТ КОМЕТЫ ===
+  ball.trail.forEach((pos, i) => {
+    const alpha = 0.7 * (1 - i / ball.trail.length);
+    const size = pos.size * (1 - i / ball.trail.length * 0.6);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = pos.color;
+    ctx.shadowColor = pos.color;
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+  ctx.globalAlpha = 1;
+  
+  // === БИБЫ ===
+  bibs.forEach(bib => {
+    const pulse = Math.sin(bib.pulse) * 0.3 + 1;
+    ctx.shadowColor = bib.color;
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = bib.color;
+    ctx.beginPath();
+    ctx.arc(bib.x, bib.y, bib.radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(bib.x, bib.y, bib.radius * 0.4 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(bib.symbol, bib.x, bib.y);
+  });
+  
+  // === ЧАСТИЦЫ ===
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  
+  // === ПЛАТФОРМЫ ===
+  ctx.shadowColor = ponger.color;
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = ponger.color;
+  ctx.fillRect(ponger.x, ponger.y, ponger.width, ponger.height);
+  
+  ctx.shadowColor = ai.color;
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = ai.color;
+  ctx.fillRect(ai.x, ai.y, ai.width, ai.height);
+  ctx.shadowBlur = 0;
+  
+  // Обводка
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ponger.x, ponger.y, ponger.width, ponger.height);
+  ctx.strokeRect(ai.x, ai.y, ai.width, ai.height);
+  
+  // === ШАР ===
+  ctx.shadowColor = ball.color;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = ball.color;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  
+  // Визуализация спина
+  if (Math.abs(ball.spin) > 0.5) {
+    ctx.strokeStyle = `rgba(255,100,255,${Math.abs(ball.spin) * 0.1})`;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius + 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+// ===== ГЛАВНЫЙ ЦИКЛ =====
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== ЗАПУСК =====
+// Стартовые бибы
+setTimeout(spawnBib, 500);
+setTimeout(spawnBib, 1500);
+setTimeout(spawnBib, 2500);
+
+gameLoop();
+</script>
+</body>
+</html>
