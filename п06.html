@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Neon Pong — с воротами</title>
+  <style>
+    body { margin: 0; padding: 0; background: black; overflow: hidden; touch-action: none; }
+    canvas { display: block; }
+    #ui {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-family: 'Courier New', monospace;
+      font-size: 22px;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      z-index: 10;
+      text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    }
+    #ui .p-score { color: #00ccff; text-shadow: 0 0 15px #00ccff; }
+    #ui .a-score { color: #ff44ff; text-shadow: 0 0 15px #ff44ff; }
+    #ui .sep { color: #aaa; margin: 0 10px; }
+    #ui .size-info { font-size: 11px; opacity: 0.6; margin-left: 5px; }
+    
+    #victory {
+      position: fixed;
+      top: 33%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50%;
+      max-width: 400px;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 20px 30px;
+      text-align: center;
+      font-family: 'Courier New', monospace;
+      font-size: 28px;
+      font-weight: bold;
+      z-index: 20;
+      display: none;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    }
+    #victory .msg { animation: pulse 0.6s ease-in-out infinite alternate; }
+    #victory .sub { font-size: 14px; font-weight: normal; opacity: 0.6; margin-top: 8px; }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.04); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <span class="p-score" id="pScore">0</span><span class="size-info" id="pSize">100%</span>
+  <span class="sep">:</span>
+  <span class="a-score" id="aScore">0</span><span class="size-info" id="aSize">100%</span>
+</div>
+
+<div id="victory">
+  <div class="msg" id="vMsg">🏆 ПОБЕДА!</div>
+  <div class="sub" id="vSub">игра продолжится через 3 секунды</div>
+</div>
+
+<script>
+// ================================================================
+// 1. МОДУЛЬ ФИЗИКИ МЯЧА (BallPhysics)
+// ================================================================
+const BallPhysics = (function() {
+  const config = { radius: 8, color: '#ffffff', speed: 5, maxSpeed: 12 };
+  let ball = { x: 0, y: 0, dx: 5, dy: 5 };
+
+  function setPosition(x, y) { ball.x = x; ball.y = y; }
+  function setSpeed(dx, dy) { ball.dx = dx; ball.dy = dy; }
+  function getBall() { return ball; }
+  function getRadius() { return config.radius; }
+  function getColor() { return config.color; }
+  function move() { ball.x += ball.dx; ball.y += ball.dy; }
+  
+  function reflect(nx, ny) {
+    let dot = ball.dx * nx + ball.dy * ny;
+    ball.dx = ball.dx - 2 * dot * nx;
+    ball.dy = ball.dy - 2 * dot * ny;
+  }
+  
+  function reflectFromCurve(px, py, w, h, amp, isPlayer) {
+    let hitPos = (ball.x - (px + w/2)) / w;
+    let angle = hitPos * Math.PI / 2.5;
+    let nx = Math.sin(angle);
+    let ny = isPlayer ? -Math.cos(angle) : Math.cos(angle);
+    reflect(nx, ny);
+    if (isPlayer) ball.y = py - config.radius;
+    else ball.y = py + h + config.radius;
+  }
+  
+  function reflectWallX() { ball.dx = -ball.dx; }
+  function reflectWallY() { ball.dy = -ball.dy; }
+  
+  function reset(cw, ch) {
+    ball.x = cw/2; ball.y = ch/2;
+    let a = (Math.random() - 0.5) * Math.PI / 2;
+    ball.dx = Math.sin(a) * config.speed;
+    ball.dy = (Math.random() > 0.5 ? 1 : -1) * Math.cos(a) * config.speed;
+  }
+  
+  function checkCollisionRect(rect) {
+    return ball.x + config.radius >= rect.x &&
+           ball.x - config.radius <= rect.x + rect.width &&
+           ball.y + config.radius >= rect.y &&
+           ball.y - config.radius <= rect.y + rect.height;
+  }
+  
+  function draw(ctx) {
+    ctx.fillStyle = config.color;
+    ctx.shadowColor = config.color;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, config.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  return {
+    config, getBall, getRadius, getColor,
+    setPosition, setSpeed, move,
+    reflect, reflectFromCurve, reflectWallX, reflectWallY,
+    reset, checkCollisionRect, draw
+  };
+})();
+
+// ================================================================
+// 2. МОДУЛЬ ПЛАТФОРМ (PlatformModule) С РАЗМЕРАМИ
+// ================================================================
+const PlatformModule = (function() {
+  const config = {
+    width: 120,
+    height: 18,
+    amplitude: 10,
+    colorPlayer: '#00ccff',
+    colorAI: '#ff44ff',
+    // НАСТРОЙКИ РАЗМЕРОВ
+    hitDecrease: 1,      // уменьшение при ударе (%)
+    goalDecrease: 5,     // уменьшение при голе (%)
+    minSize: 20,         // минимальный размер (%)
+    maxSize: 200         // максимальный размер (%)
+  };
+
+  let player = {
+    x: 0, y: 0,
+    sizePercent: 100,
+    active: true,
+    width: config.width,
+    height: config.height,
+    originalWidth: config.width,
+    originalHeight: config.height,
+    hits: 0
+  };
+  
+  let ai = {
+    x: 0, y: 0,
+    sizePercent: 100,
+    active: true,
+    width: config.width,
+    height: config.height,
+    originalWidth: config.width,
+    originalHeight: config.height,
+    hits: 0
+  };
+
+  // --- ОБНОВЛЕНИЕ РАЗМЕРОВ ПЛАТФОРМЫ ---
+  function updatePlatformSize(platform) {
+    const w = (platform.originalWidth * platform.sizePercent) / 100;
+    const h = (platform.originalHeight * platform.sizePercent) / 100;
+    const dx = (platform.width - w) / 2;
+    platform.width = w;
+    platform.height = h;
+    platform.x += dx;
+  }
+
+  // --- УМЕНЬШЕНИЕ ПЛАТФОРМЫ ---
+  function decreasePlatform(platform, amount, onDestroy) {
+    if (!platform.active) return false;
+    
+    platform.sizePercent = Math.max(config.minSize, platform.sizePercent - amount);
+    updatePlatformSize(platform);
+    
+    if (platform.sizePercent <= config.minSize) {
+      platform.active = false;
+      platform.width = 0;
+      platform.height = 0;
+      if (onDestroy) onDestroy(platform);
+      return true; // уничтожена
+    }
+    return false;
+  }
+
+  // --- ВОССТАНОВЛЕНИЕ ПЛАТФОРМЫ ---
+  function revivePlatform(platform) {
+    platform.active = true;
+    platform.sizePercent = 100;
+    platform.width = platform.originalWidth;
+    platform.height = platform.originalHeight;
+    platform.hits = 0;
+  }
+
+  // --- ПОЛУЧИТЬ РАЗМЕР В ПРОЦЕНТАХ ---
+  function getPlayerSize() { return player.sizePercent; }
+  function getAISize() { return ai.sizePercent; }
+  function isPlayerActive() { return player.active; }
+  function isAIActive() { return ai.active; }
+
+  function setPositions(px, py, ax, ay) {
+    player.x = px; player.y = py;
+    ai.x = ax; ai.y = ay;
+  }
+  
+  function getPlayerRect() {
+    return { x: player.x, y: player.y, width: player.width, height: player.height };
+  }
+  function getAIRect() {
+    return { x: ai.x, y: ai.y, width: ai.width, height: ai.height };
+  }
+  function getPlayer() { return player; }
+  function getAI() { return ai; }
+
+  // --- ОТРИСОВКА СКОБОК ---
+  function draw(ctx) {
+    const amp = config.amplitude;
+    
+    // AI (верхняя) — скобка )
+    if (ai.active && ai.width > 0) {
+      const leftY = ai.y + ai.height - amp;
+      const centerY = ai.y + ai.height + amp;
+      const rightY = ai.y + ai.height - amp;
+      ctx.shadowColor = config.colorAI;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = config.colorAI;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ai.x, leftY);
+      ctx.quadraticCurveTo(ai.x + ai.width/2, centerY, ai.x + ai.width, rightY);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    
+    // Игрок (нижняя) — скобка (
+    if (player.active && player.width > 0) {
+      const leftY = player.y + amp;
+      const centerY = player.y - amp;
+      const rightY = player.y + amp;
+      ctx.shadowColor = config.colorPlayer;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = config.colorPlayer;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(player.x, leftY);
+      ctx.quadraticCurveTo(player.x + player.width/2, centerY, player.x + player.width, rightY);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  return {
+    config,
+    player, ai,
+    setPositions,
+    getPlayerRect, getAIRect,
+    getPlayer, getAI,
+    getPlayerSize, getAISize,
+    isPlayerActive, isAIActive,
+    decreasePlatform,
+    revivePlatform,
+    updatePlatformSize,
+    draw
+  };
+})();
+
+// ================================================================
+// 3. МОДУЛЬ ВОРОТ (GoalModule)
+// ================================================================
+const GoalModule = (function() {
+  const config = {
+    initialOpening: 0,      // 0% — закрыты
+    hitOpenIncrement: 5,    // открытие при ударе в закрытую часть (%)
+    blockRecovery: 2,       // закрытие после удара (%)
+    maxOpening: 100,
+    wallColorInactive: '#333333',
+    wallColorPlayer: '#00ccff',
+    wallColorAI: '#ff44ff'
+  };
+
+  // Состояние ворот
+  let playerGoal = { openingPercent: config.initialOpening };
+  let aiGoal = { openingPercent: config.initialOpening };
+  let goalCooldown = { player: false, ai: false };
+
+  // --- СБРОС ---
+  function resetPlayerGoal() { playerGoal.openingPercent = config.initialOpening; goalCooldown.player = false; }
+  function resetAIGoal() { aiGoal.openingPercent = config.initialOpening; goalCooldown.ai = false; }
+  function resetAllGoals() { resetPlayerGoal(); resetAIGoal(); }
+
+  // --- ОТКРЫТИЕ/ЗАКРЫТИЕ ---
+  function openPlayerGoal(amount) {
+    playerGoal.openingPercent = Math.min(playerGoal.openingPercent + amount, config.maxOpening);
+  }
+  function openAIGoal(amount) {
+    aiGoal.openingPercent = Math.min(aiGoal.openingPercent + amount, config.maxOpening);
+  }
+  function closePlayerGoal(amount) {
+    playerGoal.openingPercent = Math.max(playerGoal.openingPercent - amount, 0);
+  }
+  function closeAIGoal(amount) {
+    aiGoal.openingPercent = Math.max(aiGoal.openingPercent - amount, 0);
+  }
+
+  // --- ПРОВЕРКА ГОЛА ---
+  function checkGoal(ball, goal, canvasWidth) {
+    const opening = (goal.openingPercent / 100) * canvasWidth;
+    const left = (canvasWidth - opening) / 2;
+    const right = left + opening;
+    return {
+      isGoal: ball.x > left && ball.x < right && goal.openingPercent > 0,
+      left, right, opening
+    };
+  }
+
+  function checkPlayerGoal(ball, canvasWidth) {
+    return checkGoal(ball, playerGoal, canvasWidth);
+  }
+  function checkAIGoal(ball, canvasWidth) {
+    return checkGoal(ball, aiGoal, canvasWidth);
+  }
+
+  // --- ОБРАБОТКА УДАРА В ЗАКРЫТУЮ ЧАСТЬ ---
+  function handleBlockedPlayerHit() {
+    if (playerGoal.openingPercent < config.maxOpening) {
+      openPlayerGoal(config.hitOpenIncrement);
+      return true;
+    }
+    return false;
+  }
+  function handleBlockedAIHit() {
+    if (aiGoal.openingPercent < config.maxOpening) {
+      openAIGoal(config.hitOpenIncrement);
+      return true;
+    }
+    return false;
+  }
+
+  // --- ЗАКРЫТИЕ ВОРОТ ПРИ УДАРЕ ПО МЯЧУ ---
+  function handlePlatformHitPlayer() { closePlayerGoal(config.blockRecovery); }
+  function handlePlatformHitAI() { closeAIGoal(config.blockRecovery); }
+
+  // --- ПОЛУЧЕНИЕ ДАННЫХ ---
+  function getPlayerGoal() { return playerGoal; }
+  function getAIGoal() { return aiGoal; }
+  function getConfig() { return config; }
+  function resetCooldown() { goalCooldown.player = false; goalCooldown.ai = false; }
+
+  // --- ОТРИСОВКА ВОРОТ ---
+  function drawPlayerGoal(ctx, canvasWidth, canvasHeight) {
+    const opening = (playerGoal.openingPercent / 100) * canvasWidth;
+    const left = (canvasWidth - opening) / 2;
+    const right = left + opening;
+    const y = canvasHeight - 4;
+    
+    ctx.fillStyle = config.wallColorPlayer;
+    ctx.fillRect(0, y, left, 4);
+    ctx.fillStyle = config.wallColorInactive;
+    ctx.fillRect(left, y, opening, 4);
+    ctx.fillStyle = config.wallColorPlayer;
+    ctx.fillRect(right, y, canvasWidth - right, 4);
+  }
+
+  function drawAIGoal(ctx, canvasWidth) {
+    const opening = (aiGoal.openingPercent / 100) * canvasWidth;
+    const left = (canvasWidth - opening) / 2;
+    const right = left + opening;
+    
+    ctx.fillStyle = config.wallColorAI;
+    ctx.fillRect(0, 0, left, 4);
+    ctx.fillStyle = config.wallColorInactive;
+    ctx.fillRect(left, 0, opening, 4);
+    ctx.fillStyle = config.wallColorAI;
+    ctx.fillRect(right, 0, canvasWidth - right, 4);
+  }
+
+  // --- ИНДИКАТОР РАЗМЕРА ПЛАТФОРМЫ ---
+  function drawSizeIndicator(ctx, x, y, percent, color, width = 80) {
+    const fill = (percent / 100) * width;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(x, y, width, 3);
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    ctx.fillRect(x, y, fill, 3);
+    ctx.shadowBlur = 0;
+  }
+
+  return {
+    config,
+    playerGoal, aiGoal,
+    resetPlayerGoal, resetAIGoal, resetAllGoals,
+    openPlayerGoal, openAIGoal,
+    closePlayerGoal, closeAIGoal,
+    checkPlayerGoal, checkAIGoal,
+    handleBlockedPlayerHit, handleBlockedAIHit,
+    handlePlatformHitPlayer, handlePlatformHitAI,
+    getPlayerGoal, getAIGoal,
+    resetCooldown,
+    drawPlayerGoal, drawAIGoal, drawSizeIndicator
+  };
+})();
+
+// ================================================================
+// 4. ЗВУК (SoundEngine) — упрощённый
+// ================================================================
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+    this.ready = false;
+  }
+  init() {
+    try {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      this.ready = this.ctx.state === 'running';
+    } catch(e) { this.ready = false; }
+    return this.ready;
+  }
+  ensure() {
+    if (!this.ready) return this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      try { this.ctx.resume(); this.ready = this.ctx.state === 'running'; } catch(e) {}
+    }
+    return this.ready;
+  }
+  play(freq, dur, vol = 0.25) {
+    try {
+      if (!this.ensure() || !this.ctx || this.ctx.state !== 'running') return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + dur);
+    } catch(e) {}
+  }
+  hitP() { this.play(880, 0.1, 0.3); }
+  hitA() { this.play(660, 0.1, 0.3); }
+  wall() { this.play(440, 0.06, 0.2); }
+  goalP() { this.play(1200, 0.2, 0.35); }
+  goalA() { this.play(300, 0.2, 0.35); }
+}
+const sound = new SoundEngine();
+
+// ================================================================
+// 5. ОСНОВНАЯ ИГРА
+// ================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// UI элементы
+const pScoreEl = document.getElementById('pScore');
+const aScoreEl = document.getElementById('aScore');
+const pSizeEl = document.getElementById('pSize');
+const aSizeEl = document.getElementById('aSize');
+const vScreen = document.getElementById('victory');
+const vMsg = document.getElementById('vMsg');
+
+// Состояние
+let score = { player: 0, ai: 0 };
+let mouse = { x: 0, y: 0 };
+let frame = 0;
+let goalScored = false;
+
+// Зоны
+const zones = {
+  player: { minY: canvas.height * 0.55, maxY: canvas.height - 20 },
+  ai: { minY: 10, maxY: canvas.height * 0.45 - 10 }
+};
+
+function updateZones() {
+  zones.player.minY = canvas.height * 0.55;
+  zones.player.maxY = canvas.height - 20;
+  zones.ai.minY = 10;
+  zones.ai.maxY = canvas.height * 0.45 - 10;
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  updateZones();
+}
+window.addEventListener('resize', resize);
+
+// --- ИНИЦИАЛИЗАЦИЯ ЗВУКА ---
+function initSound() { sound.init(); sound.ensure(); }
+canvas.addEventListener('click', initSound);
+canvas.addEventListener('touchstart', initSound);
+document.addEventListener('keydown', initSound);
+setInterval(() => { if (sound.ctx && sound.ctx.state === 'suspended') sound.ensure(); }, 5000);
+
+// --- УПРАВЛЕНИЕ ---
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; initSound(); });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+  initSound();
+}, { passive: false });
+
+// --- ОБНОВЛЕНИЕ UI ---
+function updateUI() {
+  const p = PlatformModule.player;
+  const a = PlatformModule.ai;
+  pScoreEl.textContent = score.player;
+  aScoreEl.textContent = score.ai;
+  pSizeEl.textContent = p.active ? `${Math.round(p.sizePercent)}%` : '💀';
+  aSizeEl.textContent = a.active ? `${Math.round(a.sizePercent)}%` : '💀';
+  pSizeEl.style.color = p.active ? '#00ccff' : '#ff4444';
+  aSizeEl.style.color = a.active ? '#ff44ff' : '#ff4444';
+}
+
+// --- ПОКАЗ ПОБЕДЫ ---
+let victoryTimer = null;
+
+function showVictory(message, color) {
+  vMsg.textContent = message;
+  vMsg.style.color = color;
+  vMsg.style.textShadow = `0 0 30px ${color}`;
+  vScreen.style.display = 'block';
+  
+  if (victoryTimer) clearTimeout(victoryTimer);
+  victoryTimer = setTimeout(() => {
+    vScreen.style.display = 'none';
+    resetGame();
+    victoryTimer = null;
+  }, 3000);
+}
+
+// --- СБРОС ИГРЫ ---
+function resetGame() {
+  // Восстанавливаем платформы
+  PlatformModule.revivePlatform(PlatformModule.player);
+  PlatformModule.revivePlatform(PlatformModule.ai);
+  PlatformModule.player.x = canvas.width/2 - PlatformModule.config.width/2;
+  PlatformModule.player.y = canvas.height - 70;
+  PlatformModule.ai.x = canvas.width/2 - PlatformModule.config.width/2;
+  PlatformModule.ai.y = 70;
+  
+  // Сбрасываем ворота
+  GoalModule.resetAllGoals();
+  GoalModule.resetCooldown();
+  
+  // Сбрасываем счёт
+  score.player = 0;
+  score.ai = 0;
+  
+  // Сбрасываем мяч
+  BallPhysics.reset(canvas.width, canvas.height);
+  
+  goalScored = false;
+  updateUI();
+  vScreen.style.display = 'none';
+}
+
+// --- СБРОС МЯЧА ПОСЛЕ ГОЛА ---
+function resetBallAfterGoal() {
+  goalScored = true;
+  BallPhysics.reset(canvas.width, canvas.height);
+  setTimeout(() => { goalScored = false; }, 800);
+}
+
+// ================================================================
+// ОСНОВНОЙ ИГРОВОЙ ЦИКЛ
+// ================================================================
+function update() {
+  frame++;
+  
+  const P = PlatformModule.player;
+  const A = PlatformModule.ai;
+  const ball = BallPhysics.getBall();
+  const radius = BallPhysics.getRadius();
+  const pRect = PlatformModule.getPlayerRect();
+  const aRect = PlatformModule.getAIRect();
+  
+  // --- ПОЗИЦИИ ПЛАТФОРМ ---
+  const pw = P.width || PlatformModule.config.width;
+  const aw = A.width || PlatformModule.config.width;
+  
+  const playerX = Math.max(0, Math.min(canvas.width - pw, mouse.x - pw/2));
+  const playerY = Math.max(zones.player.minY, Math.min(zones.player.maxY, mouse.y - 40));
+  
+  const aiX = Math.max(0, Math.min(canvas.width - aw, ball.x - aw/2));
+  const aiY = Math.max(zones.ai.minY, Math.min(zones.ai.maxY, ball.y));
+  
+  PlatformModule.setPositions(playerX, playerY, aiX, aiY);
+  
+  // --- ДВИЖЕНИЕ МЯЧА ---
+  BallPhysics.move();
+  
+  // --- СТЕНЫ (только вертикальные) ---
+  if (ball.x <= 0 || ball.x >= canvas.width) {
+    BallPhysics.reflectWallX();
+    sound.wall();
+  }
+  
+  // ============================================================
+  // ПРОВЕРКА ВОРОТ (НИЖНИЕ — ИГРОК)
+  // ============================================================
+  if (ball.y + radius >= canvas.height && !goalScored) {
+    const result = GoalModule.checkPlayerGoal(ball, canvas.width);
+    
+    if (result.isGoal) {
+      // ГОЛ! AI забивает игроку
+      score.ai++;
+      PlatformModule.decreasePlatform(P, GoalModule.config.goalDecrease, 
+        (p) => { /* платформа уничтожена */ });
+      GoalModule.resetPlayerGoal();
+      sound.goalA();
+      updateUI();
+      resetBallAfterGoal();
+    } else {
+      // Попал в закрытую часть — открываем ворота
+      GoalModule.handleBlockedPlayerHit();
+      sound.wall();
+      // Отскок
+      BallPhysics.setPosition(ball.x, canvas.height - radius);
+      const b = BallPhysics.getBall();
+      BallPhysics.setSpeed(b.dx, -Math.abs(b.dy));
+    }
+  }
+  
+  // ============================================================
+  // ПРОВЕРКА ВОРОТ (ВЕРХНИЕ — AI)
+  // ============================================================
+  if (ball.y - radius <= 0 && !goalScored) {
+    const result = GoalModule.checkAIGoal(ball, canvas.width);
+    
+    if (result.isGoal) {
+      // ГОЛ! Игрок забивает AI
+      score.player++;
+      PlatformModule.decreasePlatform(A, GoalModule.config.goalDecrease,
+        (p) => { /* платформа уничтожена */ });
+      GoalModule.resetAIGoal();
+      sound.goalP();
+      updateUI();
+      resetBallAfterGoal();
+    } else {
+      // Попал в закрытую часть — открываем ворота
+      GoalModule.handleBlockedAIHit();
+      sound.wall();
+      // Отскок
+      BallPhysics.setPosition(ball.x, radius);
+      const b = BallPhysics.getBall();
+      BallPhysics.setSpeed(b.dx, Math.abs(b.dy));
+    }
+  }
+  
+  // ============================================================
+  // СТОЛКНОВЕНИЕ С ПЛАТФОРМОЙ ИГРОКА
+  // ============================================================
+  if (P.active && BallPhysics.checkCollisionRect(pRect)) {
+    BallPhysics.reflectFromCurve(
+      pRect.x, pRect.y, pRect.width, pRect.height,
+      PlatformModule.config.amplitude, true
+    );
+    sound.hitP();
+    // Уменьшаем платформу
+    PlatformModule.decreasePlatform(P, PlatformModule.config.hitDecrease,
+      (p) => { /* уничтожена */ });
+    // Закрываем ворота
+    GoalModule.handlePlatformHitPlayer();
+    updateUI();
+  }
+  
+  // ============================================================
+  // СТОЛКНОВЕНИЕ С ПЛАТФОРМОЙ AI
+  // ============================================================
+  if (A.active && BallPhysics.checkCollisionRect(aRect)) {
+    BallPhysics.reflectFromCurve(
+      aRect.x, aRect.y, aRect.width, aRect.height,
+      PlatformModule.config.amplitude, false
+    );
+    sound.hitA();
+    PlatformModule.decreasePlatform(A, PlatformModule.config.hitDecrease,
+      (p) => { /* уничтожена */ });
+    GoalModule.handlePlatformHitAI();
+    updateUI();
+  }
+  
+  // ============================================================
+  // ПРОВЕРКА ПОБЕДЫ (одна из платформ уничтожена)
+  // ============================================================
+  if (!P.active && A.active) {
+    showVictory('🤖 AI ПОБЕДИЛ!', '#ff44ff');
+  } else if (P.active && !A.active) {
+    showVictory('👤 ИГРОК ПОБЕДИЛ!', '#00ccff');
+  }
+}
+
+// ================================================================
+// ОТРИСОВКА
+// ================================================================
+function draw() {
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Центральная линия
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.setLineDash([8, 12]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height/2);
+  ctx.lineTo(canvas.width, canvas.height/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Полупрозрачные зоны
+  ctx.fillStyle = 'rgba(255,68,255,0.04)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+  ctx.fillStyle = 'rgba(0,204,255,0.04)';
+  ctx.fillRect(0, canvas.height * 0.55, canvas.width, canvas.height * 0.45);
+  
+  // ВОРОТА
+  GoalModule.drawAIGoal(ctx, canvas.width);
+  GoalModule.drawPlayerGoal(ctx, canvas.width, canvas.height);
+  
+  // ИНДИКАТОРЫ РАЗМЕРА ПЛАТФОРМ
+  const p = PlatformModule.player;
+  const a = PlatformModule.ai;
+  if (p.active) {
+    GoalModule.drawSizeIndicator(ctx, 10, canvas.height - 25, p.sizePercent, '#00ccff');
+  }
+  if (a.active) {
+    GoalModule.drawSizeIndicator(ctx, 10, 12, a.sizePercent, '#ff44ff');
+  }
+  
+  // ИНДИКАТОР ОТКРЫТИЯ ВОРОТ
+  const pg = GoalModule.getPlayerGoal();
+  const ag = GoalModule.getAIGoal();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`В:${Math.round(pg.openingPercent)}%`, 100, canvas.height - 12);
+  ctx.fillText(`В:${Math.round(ag.openingPercent)}%`, 100, 22);
+  
+  // ПЛАТФОРМЫ
+  PlatformModule.draw(ctx);
+  
+  // МЯЧ
+  BallPhysics.draw(ctx);
+}
+
+// ================================================================
+// ГЛАВНЫЙ ЦИКЛ
+// ================================================================
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ================================================================
+// ЗАПУСК
+// ================================================================
+BallPhysics.reset(canvas.width, canvas.height);
+PlatformModule.player.x = canvas.width/2 - PlatformModule.config.width/2;
+PlatformModule.player.y = canvas.height - 70;
+PlatformModule.ai.x = canvas.width/2 - PlatformModule.config.width/2;
+PlatformModule.ai.y = 70;
+updateUI();
+gameLoop();
+
+// Инициализация звука через 0.5 сек
+setTimeout(() => { sound.init(); sound.ensure(); }, 500);
+</script>
+</body>
+</html>
