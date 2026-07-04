@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<!-- 
+  ============================================================
+  НАЧАЛО HTML-ДОКУМЕНТА
+  ============================================================
+  Это веб-страница с игрой "Neon Pong".
+  Вся игра работает в браузере, ничего не нужно устанавливать.
+  ============================================================
+-->
+<html>
+<head>
+  <!-- КОДИРОВКА: чтобы русские буквы отображались правильно -->
+  <meta charset="utf-8">
+  
+  <!-- 
+    ЗАГОЛОВОК СТРАНИЦЫ: 
+    Отображается на вкладке браузера.
+    Пользователь видит это название, когда открывает страницу.
+  -->
+  <title>Neon Pong — с воротами</title>
+  
+  <!-- 
+    ============================================================
+    БЛОК СТИЛЕЙ (CSS)
+    ============================================================
+    Здесь мы задаём внешний вид всех элементов на странице.
+    Это как "одежда" для нашей игры.
+    ============================================================
+  -->
+  <style>
+    /* 
+      СТИЛИ ДЛЯ ВСЕЙ СТРАНИЦЫ (body)
+      body - это основное тело страницы, всё что внутри него.
+    */
+    body {
+      margin: 0;           /* Убираем отступы по краям страницы */
+      padding: 0;          /* Убираем внутренние отступы */
+      background: black;   /* Чёрный фон, чтобы игра выглядела как в космосе */
+      overflow: hidden;    /* Скрываем полосы прокрутки, игра на весь экран */
+      touch-action: none;  /* Отключаем жесты браузера на телефонах (зум, скролл) */
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ ХОЛСТА (canvas)
+      Canvas - это "холст", на котором мы рисуем игру.
+      Представь, что это прозрачная доска для рисования.
+    */
+    canvas {
+      display: block;      /* Убираем лишние отступы вокруг холста */
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 2;          /* ВСЕГДА ПОВЕРХ ЭКРАНА ПОБЕДЫ */
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ ИНТЕРФЕЙСА (UI)
+      Это счёт и информация об игре в верхней части экрана.
+    */
+    #ui {
+      position: fixed;     /* Приклеиваем к экрану, не двигается при скролле */
+      top: 20px;           /* Отступ от верхнего края экрана */
+      left: 50%;           /* Сдвигаем в центр по горизонтали */
+      transform: translateX(-50%); /* Точное центрирование */
+      color: white;        /* Белый цвет текста */
+      font-family: 'Courier New', monospace; /* Шрифт как в старых компьютерах */
+      font-size: 22px;     /* Размер шрифта */
+      background: rgba(0,0,0,0.6); /* Полупрозрачный чёрный фон */
+      padding: 8px 20px;   /* Отступы внутри блока */
+      border-radius: 8px;  /* Скруглённые углы */
+      border: 1px solid rgba(255,255,255,0.15); /* Тонкая рамка */
+      z-index: 10;         /* Слой выше всего, чтобы было видно */
+      text-shadow: 0 0 10px rgba(255,255,255,0.3); /* Свечение текста */
+      pointer-events: none; /* Клики проходят сквозь, не мешают игре */
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ СЧЁТА ИГРОКА (голубой цвет)
+    */
+    #ui .p-score {
+      color: #00ccff;           /* Голубой цвет */
+      text-shadow: 0 0 15px #00ccff; /* Свечение голубым */
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ СЧЁТА AI (малиновый цвет)
+    */
+    #ui .a-score {
+      color: #ff44ff;           /* Малиновый цвет */
+      text-shadow: 0 0 15px #ff44ff; /* Свечение малиновым */
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ РАЗДЕЛИТЕЛЯ ":" МЕЖДУ СЧЁТАМИ
+    */
+    #ui .sep {
+      color: #aaa;         /* Серый цвет */
+      margin: 0 6px;       /* Отступы слева и справа */
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ РАЗМЕРА ПЛАТФОРМЫ (проценты)
+    */
+    #ui .size-info {
+      font-size: 11px;     /* Маленький шрифт */
+      opacity: 0.7;        /* Полупрозрачный */
+      margin-left: 2px;    /* Отступ слева */
+      min-width: 32px;
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ ТАКТИКИ ИИ (информация)
+    */
+    #ui .tactic-info {
+      font-size: 10px;
+      opacity: 0.5;
+      font-weight: normal;
+      color: #888;
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+    #ui .tactic-info .t-name {
+      color: #fff;
+    }
+    
+    /* 
+      СТИЛИ ДЛЯ БЕЙДЖА ПОБЕД (иконка 🏆)
+    */
+    #ui .victory-badge {
+      font-size: 14px;     /* Чуть крупнее */
+      margin-left: 8px;    /* Отступ слева */
+      animation: pulse 0.5s infinite; /* Бесконечная пульсация */
+      color: #ffd700;
+      text-shadow: 0 0 20px #ffd700;
+    }
+    
+    /* 
+      ============================================================
+      ЭКРАН ПОБЕДЫ (victory)
+      ============================================================
+      Это сообщение, которое появляется, когда кто-то победил.
+      ВАЖНО: он НЕ ОСТАНАВЛИВАЕТ игру и НЕ ПЕРЕКРЫВАЕТ её.
+    */
+    #victory {
+      position: fixed;          /* Приклеиваем к экрану */
+      top: 33%;                 /* Отступ сверху — треть экрана */
+      left: 50%;                /* Центрируем */
+      transform: translateX(-50%); /* Точное центрирование */
+      width: 50%;               /* Ширина — половина экрана */
+      max-width: 400px;         /* Но не шире 400 пикселей */
+      background: rgba(0,0,0,0.7); /* Полупрозрачный чёрный фон */
+      border: 1px solid rgba(255,255,255,0.15); /* Тонкая рамка */
+      border-radius: 12px;      /* Скруглённые углы */
+      padding: 20px 30px;       /* Внутренние отступы */
+      text-align: center;       /* Текст по центру */
+      font-family: 'Courier New', monospace; /* Ретро-шрифт */
+      font-size: 28px;          /* Крупный текст */
+      font-weight: bold;        /* Жирный */
+      z-index: 5;               /* Слой 5 — НИЖЕ canvas (у canvas z-index: 2) */
+      backdrop-filter: blur(2px); /* Лёгкое размытие фона */
+      box-shadow: 0 0 40px rgba(0,0,0,0.5); /* Тень */
+      pointer-events: none;     /* КЛИКИ ПРОХОДЯТ СКВОЗЬ — игра не блокируется! */
+      display: none;            /* По умолчанию скрыт */
+    }
+    
+    /* 
+      АНИМАЦИЯ ДЛЯ ТЕКСТА ПОБЕДЫ — пульсация
+    */
+    #victory .msg {
+      animation: pulse 0.6s ease-in-out infinite alternate;
+    }
+    
+    /* 
+      ПОДЗАГОЛОВОК НА ЭКРАНЕ ПОБЕДЫ
+    */
+    #victory .sub {
+      font-size: 14px;     /* Меньше основного текста */
+      font-weight: normal; /* Не жирный */
+      opacity: 0.6;        /* Полупрозрачный */
+      margin-top: 4px;     /* Отступ сверху */
+    }
+    
+    /* 
+      ОПИСАНИЕ АНИМАЦИИ ПУЛЬСАЦИИ
+    */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.9; }
+      100% { transform: scale(1.04); opacity: 1; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 
+    ============================================================
+    ТЕЛО СТРАНИЦЫ
+    ============================================================
+    Здесь мы размещаем все видимые элементы игры.
+  -->
+  
+  <!-- 
+    ХОЛСТ (canvas)
+    На этом холсте мы будем рисовать игру.
+    ID "game" нужен, чтобы найти этот элемент в JavaScript.
+  -->
+  <canvas id="game"></canvas>
+
+  <!-- 
+    ИНТЕРФЕЙС (UI) — счёт и информация
+  -->
+  <div id="ui">
+    <!-- Счёт игрока (голубой) -->
+    <span class="p-score" id="pScore">0</span>
+    <!-- Размер платформы игрока в процентах -->
+    <span class="size-info" id="pSize" style="color:#00ccff;">100%</span>
+    
+    <!-- Разделитель -->
+    <span class="sep">:</span>
+    
+    <!-- Счёт AI (малиновый) -->
+    <span class="a-score" id="aScore">0</span>
+    <!-- Размер платформы AI в процентах -->
+    <span class="size-info" id="aSize" style="color:#ff44ff;">100%</span>
+    
+    <!-- Тактики ИИ -->
+    <span class="tactic-info" id="tacticInfo">
+      <span class="t-name" id="tacticBottom">защита</span> 
+      <span style="opacity:0.3;">|</span> 
+      <span class="t-name" id="tacticTop">защита</span>
+    </span>
+    
+    <!-- Бейдж побед (показывается, когда есть победы) -->
+    <span class="victory-badge" id="victoryBadge" style="display:none;"></span>
+  </div>
+
+  <!-- 
+    ЭКРАН ПОБЕДЫ
+    Появляется, когда кто-то победил.
+    НЕ БЛОКИРУЕТ ИГРУ! pointer-events: none
+  -->
+  <div id="victory">
+    <div class="msg" id="vMsg">🏆 ПОБЕДА!</div>
+    <div class="sub" id="vSub">+10% к здоровью</div>
+  </div>
+
+  <!-- 
+    ============================================================
+    НАЧАЛО JAVASCRIPT
+    ============================================================
+    Здесь начинается код, который управляет игрой.
+    ============================================================
+  -->
+  <script>
+  
+  // ================================================================
+  // МОДУЛЬ 1: ФИЗИКА МЯЧА (BallPhysics)
+  // ================================================================
+  // Этот модуль отвечает ЗА ВСЁ, что связано с мячом:
+  // - его положение (x, y)
+  // - его скорость (dx, dy)
+  // - движение
+  // - отскоки от стен и платформ
+  // - проверку столкновений
+  // - отрисовку
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ МОЖНО РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Он не зависит от других модулей.
+  // Можно заменить на другой модуль с теми же методами.
+  // ================================================================
+  const BallPhysics = (function() {
+    // --- КОНФИГУРАЦИЯ (настройки мяча) ---
+    // Это как "паспорт" мяча: его свойства.
+    const config = {
+      radius: 8,        // Радиус мяча в пикселях (8px)
+      color: '#ffffff', // Белый цвет
+      speed: 5,         // Начальная скорость мяча
+      maxSpeed: 14      // Максимальная скорость (чтобы не улетел)
+    };
+
+    // --- СОСТОЯНИЕ МЯЧА (внутренние данные) ---
+    // Это текущее положение и скорость мяча.
+    let ball = {
+      x: 0,   // Координата X (горизонталь)
+      y: 0,   // Координата Y (вертикаль)
+      dx: 5,  // Скорость по X (пикселей за кадр)
+      dy: 5   // Скорость по Y (пикселей за кадр)
+    };
+
+    // --- МЕТОДЫ (функции для работы с мячом) ---
+
+    // Установить позицию мяча
+    function setPosition(x, y) {
+      ball.x = x;
+      ball.y = y;
+    }
+
+    // Установить скорость мяча
+    function setSpeed(dx, dy) {
+      // Ограничиваем максимальную скорость
+      const speed = Math.hypot(dx, dy);
+      if (speed > config.maxSpeed) {
+        const scale = config.maxSpeed / speed;
+        ball.dx = dx * scale;
+        ball.dy = dy * scale;
+      } else {
+        ball.dx = dx;
+        ball.dy = dy;
+      }
+    }
+
+    // Добавить скорость (для передачи от платформы)
+    function addSpeed(dx, dy) {
+      const newDx = ball.dx + dx;
+      const newDy = ball.dy + dy;
+      setSpeed(newDx, newDy);
+    }
+
+    // Получить данные мяча (позицию и скорость)
+    function getBall() {
+      return ball;
+    }
+
+    // Получить радиус мяча
+    function getRadius() {
+      return config.radius;
+    }
+
+    // Получить цвет мяча
+    function getColor() {
+      return config.color;
+    }
+
+    // Движение мяча (перемещение на один кадр)
+    function move() {
+      ball.x += ball.dx;  // Прибавляем скорость к позиции
+      ball.y += ball.dy;
+    }
+
+    // ОТРАЖЕНИЕ ОТ ПОВЕРХНОСТИ (школьная физика)
+    // normalX, normalY — это направление, перпендикулярное поверхности
+    // Например: (0, 1) — поверхность снизу, (0, -1) — сверху
+    function reflect(nx, ny) {
+      // Скалярное произведение скорости и нормали
+      let dot = ball.dx * nx + ball.dy * ny;
+      // Формула отражения: V = V - 2 * (V · N) * N
+      ball.dx = ball.dx - 2 * dot * nx;
+      ball.dy = ball.dy - 2 * dot * ny;
+    }
+
+    // ОТРАЖЕНИЕ ОТ ИЗОГНУТОЙ ПЛАТФОРМЫ (СКОБКИ)
+    // Платформы у нас изогнутые, как скобки ( и )
+    function reflectFromCurve(px, py, w, h, amp, isPlayer, platformVx, platformVy) {
+      // Вычисляем, где именно мяч попал в платформу
+      // hitPos = -0.5 (левый край) ... 0.5 (правый край)
+      let hitPos = (ball.x - (px + w/2)) / w;
+      
+      // Угол наклона поверхности в точке удара
+      let angle = hitPos * Math.PI / 2.5;
+      
+      // Нормаль к поверхности (перпендикуляр)
+      let nx = Math.sin(angle);
+      let ny = isPlayer ? -Math.cos(angle) : Math.cos(angle);
+      
+      // Применяем отражение
+      reflect(nx, ny);
+      
+      // --- ПЕРЕДАЁМ СКОРОСТЬ ПЛАТФОРМЫ МЯЧУ (30%) ---
+      const transfer = 0.3;
+      ball.dx += platformVx * transfer;
+      ball.dy += platformVy * transfer;
+      
+      // Корректируем позицию, чтобы мяч не застрял в платформе
+      if (isPlayer) {
+        ball.y = py - config.radius;  // Ставим над платформой
+      } else {
+        ball.y = py + h + config.radius; // Ставим под платформой
+      }
+      
+      // Ограничиваем скорость
+      const speed = Math.hypot(ball.dx, ball.dy);
+      if (speed > config.maxSpeed) {
+        const scale = config.maxSpeed / speed;
+        ball.dx *= scale;
+        ball.dy *= scale;
+      }
+    }
+
+    // ОТСКОК ОТ ВЕРТИКАЛЬНОЙ СТЕНЫ (меняем скорость по X)
+    function reflectWallX() {
+      ball.dx = -ball.dx;  // Просто меняем направление
+    }
+
+    // ОТСКОК ОТ ГОРИЗОНТАЛЬНОЙ СТЕНЫ (меняем скорость по Y)
+    function reflectWallY() {
+      ball.dy = -ball.dy;
+    }
+
+    // СБРОС МЯЧА В ЦЕНТР (используется в начале игры)
+    function reset(cw, ch) {
+      ball.x = cw / 2;
+      ball.y = ch / 2;
+      // Случайное направление
+      let a = (Math.random() - 0.5) * Math.PI / 2;
+      ball.dx = Math.sin(a) * config.speed;
+      ball.dy = (Math.random() > 0.5 ? 1 : -1) * Math.cos(a) * config.speed;
+    }
+
+    // ПРОВЕРКА СТОЛКНОВЕНИЯ С ПРЯМОУГОЛЬНИКОМ
+    // Проверяем, пересекается ли мяч с прямоугольной областью
+    function checkCollisionRect(rect) {
+      return ball.x + config.radius >= rect.x &&
+             ball.x - config.radius <= rect.x + rect.width &&
+             ball.y + config.radius >= rect.y &&
+             ball.y - config.radius <= rect.y + rect.height;
+    }
+
+    // ОТРИСОВКА МЯЧА НА ЭКРАНЕ
+    function draw(ctx) {
+      ctx.fillStyle = config.color;     // Белый цвет
+      ctx.shadowColor = config.color;   // Свечение белым
+      ctx.shadowBlur = 20;              // Радиус свечения
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, config.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;               // Сбрасываем свечение
+    }
+
+    // --- ЧТО МЫ ОТДАЁМ НАРУЖУ (публичное API) ---
+    // Это список функций, которые можно вызывать из других модулей.
+    return {
+      config, getBall, getRadius, getColor,
+      setPosition, setSpeed, addSpeed, move,
+      reflect, reflectFromCurve, reflectWallX, reflectWallY,
+      reset, checkCollisionRect, draw
+    };
+  })(); // КОНЕЦ МОДУЛЯ BallPhysics
+
+
+  // ================================================================
+  // МОДУЛЬ 2: ПЛАТФОРМЫ (PlatformModule)
+  // ================================================================
+  // Этот модуль отвечает ЗА ВСЁ, что связано с платформами:
+  // - их позиция
+  // - размер (в процентах)
+  // - здоровье (активна/уничтожена)
+  // - уменьшение при ударах и голах
+  // - воскрешение
+  // - бонус победителю (+10%)
+  // - отрисовка
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ МОЖНО РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Он не зависит от других модулей.
+  // ================================================================
+  const PlatformModule = (function() {
+    // --- КОНФИГУРАЦИЯ (настройки платформ) ---
+    const config = {
+      width: 120,           // Ширина платформы в пикселях
+      height: 18,           // Высота платформы
+      amplitude: 10,        // Амплитуда изгиба (как сильно скобка выгнута)
+      colorPlayer: '#00ccff', // Голубой цвет для игрока
+      colorAI: '#ff44ff',     // Малиновый цвет для AI
+      hitDecrease: 1,       // Уменьшение при ударе (1%)
+      goalDecrease: 3,      // Уменьшение при голе (3%)
+      victoryBonus: 10,     // Бонус победителю (+10%)
+      minSize: 20,          // Минимальный размер (20%)
+      maxSize: 200          // Максимальный размер (200%)
+    };
+
+    // --- СЧЁТЧИК ПОБЕД (глобальный) ---
+    let victoryCount = { player: 0, ai: 0 };
+
+    // --- СОСТОЯНИЕ ПЛАТФОРМЫ ИГРОКА ---
+    let player = {
+      x: 0, y: 0,                    // Позиция
+      sizePercent: 100,              // Размер в процентах (100% = норма)
+      active: true,                  // Активна? (true = жива)
+      width: config.width,           // Текущая ширина
+      height: config.height,         // Текущая высота
+      originalWidth: config.width,   // Исходная ширина (для восстановления)
+      originalHeight: config.height, // Исходная высота
+      hits: 0,                       // Счётчик ударов
+      victories: 0,                  // Счётчик побед
+      vx: 0,                         // Скорость по X (для передачи мячу)
+      vy: 0                          // Скорость по Y
+    };
+    
+    // --- СОСТОЯНИЕ ПЛАТФОРМЫ AI ---
+    let ai = {
+      x: 0, y: 0,
+      sizePercent: 100,
+      active: true,
+      width: config.width,
+      height: config.height,
+      originalWidth: config.width,
+      originalHeight: config.height,
+      hits: 0,
+      victories: 0,
+      vx: 0,
+      vy: 0
+    };
+
+    // --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: ПЕРЕСЧЁТ РАЗМЕРА ПЛАТФОРМЫ ---
+    // Когда меняется sizePercent, нужно пересчитать width и height.
+    function updatePlatformSize(platform) {
+      const w = (platform.originalWidth * platform.sizePercent) / 100;
+      const h = (platform.originalHeight * platform.sizePercent) / 100;
+      const dx = (platform.width - w) / 2; // Смещение для центрирования
+      platform.width = w;
+      platform.height = h;
+      platform.x += dx; // Центрируем платформу
+    }
+
+    // --- УМЕНЬШЕНИЕ ПЛАТФОРМЫ ---
+    // Уменьшаем размер на amount процентов.
+    // Если размер упал до минимума — платформа уничтожается.
+    function decreasePlatform(platform, amount, onDestroy) {
+      if (!platform.active) return false; // Если уже уничтожена — ничего не делаем
+      
+      // Уменьшаем размер, но не меньше минимума
+      platform.sizePercent = Math.max(config.minSize, platform.sizePercent - amount);
+      updatePlatformSize(platform); // Пересчитываем пиксели
+      
+      // Проверяем, не уничтожена ли платформа
+      if (platform.sizePercent <= config.minSize) {
+        platform.active = false;  // Платформа уничтожена
+        platform.width = 0;
+        platform.height = 0;
+        if (onDestroy) onDestroy(platform); // Вызываем колбэк (обработчик)
+        return true; // Вернули true — платформа уничтожена
+      }
+      return false; // Вернули false — платформа жива
+    }
+
+    // --- ВОССТАНОВЛЕНИЕ ПЛАТФОРМЫ (100% здоровья) ---
+    function revivePlatform(platform) {
+      platform.active = true;
+      platform.sizePercent = 100;
+      platform.width = platform.originalWidth;
+      platform.height = platform.originalHeight;
+      platform.hits = 0;
+      platform.vx = 0;
+      platform.vy = 0;
+    }
+
+    // --- ВОССТАНОВЛЕНИЕ ПЛАТФОРМЫ С БОНУСОМ (для победителя) ---
+    function revivePlatformWithBonus(platform, bonusPercent) {
+      platform.active = true;
+      platform.sizePercent = Math.min(
+        platform.sizePercent + bonusPercent,
+        config.maxSize
+      );
+      platform.width = (platform.originalWidth * platform.sizePercent) / 100;
+      platform.height = (platform.originalHeight * platform.sizePercent) / 100;
+      platform.hits = 0;
+      platform.vx = 0;
+      platform.vy = 0;
+    }
+
+    // --- ГЕТТЕРЫ (функции для получения данных) ---
+    function getPlayerSize() { return player.sizePercent; }
+    function getAISize() { return ai.sizePercent; }
+    function isPlayerActive() { return player.active; }
+    function isAIActive() { return ai.active; }
+    function getPlayerVictories() { return player.victories; }
+    function getAIVictories() { return ai.victories; }
+    function getPlayerSpeed() { return { vx: player.vx, vy: player.vy }; }
+    function getAISpeed() { return { vx: ai.vx, vy: ai.vy }; }
+
+    // --- УСТАНОВКА ПОЗИЦИЙ ПЛАТФОРМ ---
+    function setPositions(px, py, ax, ay) {
+      if (player.active) {
+        player.x = px;
+        player.y = py;
+      }
+      if (ai.active) {
+        ai.x = ax;
+        ai.y = ay;
+      }
+    }
+
+    // --- УСТАНОВКА СКОРОСТЕЙ ПЛАТФОРМ (от ИИ) ---
+    function setSpeeds(pvx, pvy, avx, avy) {
+      if (player.active) {
+        player.vx = pvx;
+        player.vy = pvy;
+      }
+      if (ai.active) {
+        ai.vx = avx;
+        ai.vy = avy;
+      }
+    }
+
+    // --- ПОЛУЧЕНИЕ ПРЯМОУГОЛЬНИКОВ ДЛЯ ПРОВЕРКИ СТОЛКНОВЕНИЙ ---
+    function getPlayerRect() {
+      return { x: player.x, y: player.y, width: player.width, height: player.height };
+    }
+    function getAIRect() {
+      return { x: ai.x, y: ai.y, width: ai.width, height: ai.height };
+    }
+
+    // --- ПОЛУЧЕНИЕ ОБЪЕКТОВ ПЛАТФОРМ ---
+    function getPlayer() { return player; }
+    function getAI() { return ai; }
+
+    // --- ОТРИСОВКА ПЛАТФОРМ (СКОБОК) ---
+    function draw(ctx) {
+      const amp = config.amplitude;
+      
+      // === ВЕРХНЯЯ ПЛАТФОРМА (AI) — скобка ) ===
+      // Выглядит как дуга, выгнутая вниз.
+      if (ai.active && ai.width > 0) {
+        const leftY = ai.y + ai.height - amp;
+        const centerY = ai.y + ai.height + amp;
+        const rightY = ai.y + ai.height - amp;
+        ctx.shadowColor = config.colorAI;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = config.colorAI;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(ai.x, leftY);
+        ctx.quadraticCurveTo(ai.x + ai.width/2, centerY, ai.x + ai.width, rightY);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      
+      // === НИЖНЯЯ ПЛАТФОРМА (игрок) — скобка ( ===
+      // Выглядит как дуга, выгнутая вверх.
+      if (player.active && player.width > 0) {
+        const leftY = player.y + amp;
+        const centerY = player.y - amp;
+        const rightY = player.y + amp;
+        ctx.shadowColor = config.colorPlayer;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = config.colorPlayer;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(player.x, leftY);
+        ctx.quadraticCurveTo(player.x + player.width/2, centerY, player.x + player.width, rightY);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    // --- ЧТО МЫ ОТДАЁМ НАРУЖУ (публичное API) ---
+    return {
+      config,
+      player, ai,
+      victoryCount,
+      setPositions,
+      setSpeeds,
+      getPlayerRect, getAIRect,
+      getPlayer, getAI,
+      getPlayerSize, getAISize,
+      isPlayerActive, isAIActive,
+      getPlayerVictories, getAIVictories,
+      getPlayerSpeed, getAISpeed,
+      decreasePlatform,
+      revivePlatform,
+      revivePlatformWithBonus,
+      updatePlatformSize,
+      draw
+    };
+  })(); // КОНЕЦ МОДУЛЯ PlatformModule
+
+
+  // ================================================================
+  // МОДУЛЬ 3: ВОРОТА (GoalModule)
+  // ================================================================
+  // Этот модуль отвечает ЗА ВСЁ, что связано с воротами:
+  // - открытие/закрытие ворот
+  // - проверка, попал ли мяч в открытую часть
+  // - обработка ударов в закрытую часть
+  // - отрисовка ворот
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ МОЖНО РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Он не зависит от других модулей.
+  // ================================================================
+  const GoalModule = (function() {
+    // --- КОНФИГУРАЦИЯ (настройки ворот) ---
+    const config = {
+      initialOpening: 0,        // Начальное открытие (0% = закрыты)
+      hitOpenIncrement: 5,      // Открытие при ударе в закрытую часть (5%)
+      blockRecovery: 2,         // Закрытие после удара (2%)
+      maxOpening: 100,          // Максимальное открытие (100%)
+      wallColorInactive: '#333333', // Цвет закрытой части (серый)
+      wallColorPlayer: '#00ccff',   // Цвет ворот игрока (голубой)
+      wallColorAI: '#ff44ff'        // Цвет ворот AI (малиновый)
+    };
+
+    // --- СОСТОЯНИЕ ВОРОТ ---
+    let playerGoal = { openingPercent: config.initialOpening };
+    let aiGoal = { openingPercent: config.initialOpening };
+
+    // --- СБРОС ВОРОТ ---
+    function resetPlayerGoal() {
+      playerGoal.openingPercent = config.initialOpening;
+    }
+    function resetAIGoal() {
+      aiGoal.openingPercent = config.initialOpening;
+    }
+    function resetAllGoals() {
+      resetPlayerGoal();
+      resetAIGoal();
+    }
+
+    // --- ОТКРЫТИЕ ВОРОТ ---
+    function openPlayerGoal(amount) {
+      playerGoal.openingPercent = Math.min(
+        playerGoal.openingPercent + amount,
+        config.maxOpening
+      );
+    }
+    function openAIGoal(amount) {
+      aiGoal.openingPercent = Math.min(
+        aiGoal.openingPercent + amount,
+        config.maxOpening
+      );
+    }
+
+    // --- ЗАКРЫТИЕ ВОРОТ ---
+    function closePlayerGoal(amount) {
+      playerGoal.openingPercent = Math.max(
+        playerGoal.openingPercent - amount,
+        0
+      );
+    }
+    function closeAIGoal(amount) {
+      aiGoal.openingPercent = Math.max(
+        aiGoal.openingPercent - amount,
+        0
+      );
+    }
+
+    // --- ПРОВЕРКА ГОЛА ---
+    // Проверяем, попал ли мяч в открытую часть ворот.
+    function checkGoal(ball, goal, canvasWidth) {
+      const opening = (goal.openingPercent / 100) * canvasWidth;
+      const left = (canvasWidth - opening) / 2;
+      const right = left + opening;
+      return {
+        isGoal: ball.x > left && ball.x < right && goal.openingPercent > 0,
+        left, right, opening
+      };
+    }
+
+    function checkPlayerGoal(ball, canvasWidth) {
+      return checkGoal(ball, playerGoal, canvasWidth);
+    }
+    function checkAIGoal(ball, canvasWidth) {
+      return checkGoal(ball, aiGoal, canvasWidth);
+    }
+
+    // --- ОБРАБОТКА УДАРА В ЗАКРЫТУЮ ЧАСТЬ ВОРОТ ---
+    function handleBlockedPlayerHit() {
+      if (playerGoal.openingPercent < config.maxOpening) {
+        openPlayerGoal(config.hitOpenIncrement);
+        return true;
+      }
+      return false;
+    }
+    function handleBlockedAIHit() {
+      if (aiGoal.openingPercent < config.maxOpening) {
+        openAIGoal(config.hitOpenIncrement);
+        return true;
+      }
+      return false;
+    }
+
+    // --- ЗАКРЫТИЕ ВОРОТ ПРИ УДАРЕ ПО МЯЧУ ---
+    function handlePlatformHitPlayer() {
+      closePlayerGoal(config.blockRecovery);
+    }
+    function handlePlatformHitAI() {
+      closeAIGoal(config.blockRecovery);
+    }
+
+    // --- ГЕТТЕРЫ ---
+    function getPlayerGoal() { return playerGoal; }
+    function getAIGoal() { return aiGoal; }
+    function getConfig() { return config; }
+
+    // --- ОТРИСОВКА ВОРОТ ---
+    // Ворота игрока (нижние)
+    function drawPlayerGoal(ctx, canvasWidth, canvasHeight) {
+      const opening = (playerGoal.openingPercent / 100) * canvasWidth;
+      const left = (canvasWidth - opening) / 2;
+      const right = left + opening;
+      const y = canvasHeight - 4;
+      
+      // Левая закрытая часть (активная, цветная)
+      ctx.fillStyle = config.wallColorPlayer;
+      ctx.fillRect(0, y, left, 4);
+      // Открытая часть (неактивная, серая)
+      ctx.fillStyle = config.wallColorInactive;
+      ctx.fillRect(left, y, opening, 4);
+      // Правая закрытая часть (активная, цветная)
+      ctx.fillStyle = config.wallColorPlayer;
+      ctx.fillRect(right, y, canvasWidth - right, 4);
+    }
+
+    // Ворота AI (верхние)
+    function drawAIGoal(ctx, canvasWidth) {
+      const opening = (aiGoal.openingPercent / 100) * canvasWidth;
+      const left = (canvasWidth - opening) / 2;
+      const right = left + opening;
+      
+      ctx.fillStyle = config.wallColorAI;
+      ctx.fillRect(0, 0, left, 4);
+      ctx.fillStyle = config.wallColorInactive;
+      ctx.fillRect(left, 0, opening, 4);
+      ctx.fillStyle = config.wallColorAI;
+      ctx.fillRect(right, 0, canvasWidth - right, 4);
+    }
+
+    // --- ИНДИКАТОР РАЗМЕРА ПЛАТФОРМЫ ---
+    // Полоска, показывающая текущий размер в процентах.
+    function drawSizeIndicator(ctx, x, y, percent, color, width = 80) {
+      const fill = (percent / 100) * width;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; // Фон полоски
+      ctx.fillRect(x, y, width, 3);
+      ctx.fillStyle = color;                   // Заполнение
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 4;
+      ctx.fillRect(x, y, fill, 3);
+      ctx.shadowBlur = 0;
+    }
+
+    // --- ПУБЛИЧНОЕ API ---
+    return {
+      config,
+      playerGoal, aiGoal,
+      resetPlayerGoal, resetAIGoal, resetAllGoals,
+      openPlayerGoal, openAIGoal,
+      closePlayerGoal, closeAIGoal,
+      checkPlayerGoal, checkAIGoal,
+      handleBlockedPlayerHit, handleBlockedAIHit,
+      handlePlatformHitPlayer, handlePlatformHitAI,
+      getPlayerGoal, getAIGoal,
+      drawPlayerGoal, drawAIGoal, drawSizeIndicator
+    };
+  })(); // КОНЕЦ МОДУЛЯ GoalModule
+
+
+  // ================================================================
+  // МОДУЛЬ 4: ЗВУК (SoundEngine)
+  // ================================================================
+  // Этот модуль отвечает ЗА ВСЁ, что связано со звуком:
+  // - инициализация аудио-контекста
+  // - воспроизведение звуков
+  // - проверка, что звук работает
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ МОЖНО РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Это класс, который можно заменить на другой класс с теми же методами.
+  // ================================================================
+  class SoundEngine {
+    // --- КОНСТРУКТОР (вызывается при создании объекта) ---
+    constructor() {
+      this.ctx = null;      // Аудио-контекст (главный объект звука)
+      this.ready = false;   // Готов ли звук к работе?
+    }
+    
+    // --- ИНИЦИАЛИЗАЦИЯ ---
+    // Создаём аудио-контекст и пробуждаем его.
+    // ВАЖНО: на телефонах звук работает только после КЛИКА пользователя!
+    init() {
+      try {
+        if (!this.ctx) {
+          // Создаём аудио-контекст (Web Audio API)
+          const AC = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AC();
+        }
+        // Если контекст "уснул" — пробуждаем
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+        this.ready = this.ctx.state === 'running';
+      } catch(e) {
+        this.ready = false; // Если что-то пошло не так — звук отключаем
+      }
+      return this.ready;
+    }
+    
+    // --- ПРОВЕРКА, ЧТО ЗВУК РАБОТАЕТ ---
+    ensure() {
+      if (!this.ready) return this.init();
+      if (this.ctx && this.ctx.state === 'suspended') {
+        try {
+          this.ctx.resume();
+          this.ready = this.ctx.state === 'running';
+        } catch(e) {}
+      }
+      return this.ready;
+    }
+    
+    // --- ВОСПРОИЗВЕДЕНИЕ ЗВУКА ---
+    // freq = частота звука (чем выше, тем выше звук)
+    // dur = длительность в секундах
+    // vol = громкость (0-1)
+    play(freq, dur, vol = 0.25) {
+      try {
+        if (!this.ensure() || !this.ctx || this.ctx.state !== 'running') return;
+        
+        // Создаём осциллятор (источник звука)
+        const osc = this.ctx.createOscillator();
+        // Создаём усилитель (регулирует громкость)
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'square';          // Тип звука: "квадрат" (8-битный звук)
+        osc.frequency.value = freq;   // Устанавливаем частоту
+        gain.gain.value = vol;        // Устанавливаем громкость
+        
+        // Соединяем: осциллятор → усилитель → выход (колонки)
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        // Запускаем и останавливаем звук
+        osc.start();
+        osc.stop(this.ctx.currentTime + dur);
+      } catch(e) {
+        // Игнорируем ошибки звука, чтобы игра не падала
+      }
+    }
+    
+    // --- ВСЕ ЗВУКИ ИГРЫ ---
+    hitP() { this.play(880, 0.1, 0.3); }   // Удар о платформу игрока
+    hitA() { this.play(660, 0.1, 0.3); }   // Удар о платформу AI
+    wall() { this.play(440, 0.06, 0.2); }  // Удар о стену
+    goalP() { this.play(1200, 0.2, 0.35); } // Гол игрока
+    goalA() { this.play(300, 0.2, 0.35); }  // Гол AI
+    victory() {
+      // Три звука подряд — победная мелодия
+      this.play(523, 0.1, 0.3);
+      setTimeout(() => this.play(659, 0.1, 0.3), 100);
+      setTimeout(() => this.play(784, 0.15, 0.35), 200);
+    }
+  }
+
+  // --- СОЗДАЁМ ОБЪЕКТ ЗВУКА (глобальный) ---
+  const sound = new SoundEngine();
+
+
+  // ================================================================
+  // МОДУЛЬ 5: ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ (AIModule)
+  // ================================================================
+  // Этот модуль отвечает ЗА ВСЁ, что связано с ИИ:
+  // - выбор тактики (защита, атака, банк, спин, фейк)
+  // - смена тактики каждые 30-100 секунд
+  // - плавное движение с инерцией
+  // - передача скорости мячу
+  // - перехват управления у игрока через 1 секунду бездействия
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ МОЖНО РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Он не зависит от других модулей.
+  // ВСЕ НАСТРОЙКИ ВНУТРИ МОДУЛЯ!
+  // ================================================================
+  const AIModule = (function() {
+    'use strict';
+
+    // ================================================================
+    // КОНФИГУРАЦИЯ ИИ
+    // ================================================================
+    const CONFIG = {
+      // ВРЕМЕННЫЕ ИНТЕРВАЛЫ (в кадрах, 60 кадров = 1 секунда)
+      TACTIC_CHANGE: {
+        MIN: 1800,  // 30 секунд
+        MAX: 6000   // 100 секунд
+      },
+      
+      // ИНЕРЦИЯ ПЛАТФОРМЫ
+      INERTIA: 0.94,           // Чем меньше, тем быстрее останавливается
+      MAX_SPEED: 12,           // Максимальная скорость платформы
+      FOLLOW_BASE: 0.15,       // Базовая сила следования
+      FOLLOW_FACTOR: 0.001,    // Зависимость от расстояния
+      MAX_FOLLOW: 0.35,        // Максимальная сила следования
+      
+      // ПЕРЕДАЧА СКОРОСТИ МЯЧУ (при ударе)
+      SPEED_TRANSFER: 0.3,     // 30% скорости платформы передаётся мячу
+      
+      // БЕЗДЕЙСТВИЕ ИГРОКА
+      INACTIVE_THRESHOLD: 60,  // 1 секунда (60 кадров)
+      
+      // ПРЕДСКАЗАНИЕ
+      PREDICTION_FRAMES: 3,    // На сколько кадров вперёд смотреть
+      
+      // УРОВНИ СЛОЖНОСТИ
+      DIFFICULTIES: {
+        EASY: { reaction: 0.15, error: 40, aggression: 0.3, label: 'ЛЁГКИЙ' },
+        MEDIUM: { reaction: 0.08, error: 20, aggression: 0.6, label: 'СРЕДНИЙ' },
+        HARD: { reaction: 0.04, error: 10, aggression: 0.9, label: 'СЛОЖНЫЙ' },
+        EXPERT: { reaction: 0.02, error: 5, aggression: 1.0, label: 'ЭКСПЕРТ' }
+      },
+      
+      // НАЗВАНИЯ ТАКТИК (для отображения)
+      TACTIC_NAMES: {
+        defend: '🛡️ защита',
+        attack: '⚔️ атака',
+        bank: '🔄 банк',
+        spin: '🌀 спин',
+        fake: '🎭 фейк',
+        aggressive: '💢 агрессия'
+      }
+    };
+
+    // ================================================================
+    // КЛАСС: ОДИН ИИ ДЛЯ ОДНОЙ ПЛАТФОРМЫ
+    // ================================================================
+    class AIPlayer {
+      /**
+       * Создаёт ИИ для управления платформой
+       * @param {Object} platform - Объект платформы { x, y, width, height, active }
+       * @param {boolean} isTop - true если платформа сверху, false если снизу
+       * @param {string} difficulty - 'EASY', 'MEDIUM', 'HARD', 'EXPERT'
+       */
+      constructor(platform, isTop, difficulty = 'MEDIUM') {
+        // --- ССЫЛКА НА ПЛАТФОРМУ ---
+        this.platform = platform;           // Платформа, которой управляем
+        this.isTop = isTop;                // Позиция (верх/низ)
+        
+        // --- ПАРАМЕТРЫ СЛОЖНОСТИ ---
+        this.setDifficulty(difficulty);
+        
+        // --- СОСТОЯНИЕ ТАКТИКИ ---
+        this.tactic = 'defend';            // Текущая тактика
+        this.tacticTimer = 0;              // Счётчик кадров с последней смены
+        this.tacticInterval = this._randomInterval(); // Интервал до смены
+        this.tacticHistory = [];           // История тактик (для разнообразия)
+        
+        // --- ИНЕРЦИЯ ПЛАТФОРМЫ ---
+        this.vx = 0;                       // Скорость по X
+        this.vy = 0;                       // Скорость по Y
+        
+        // --- УПРАВЛЕНИЕ ИГРОКОМ ---
+        this.isActive = true;              // Управляет ли ИИ платформой
+        this.inactiveTimer = 0;            // Таймер бездействия игрока
+        
+        // --- ПРЕДСКАЗАНИЕ ---
+        this.predictedX = 0;
+        this.predictedY = 0;
+        
+        // --- ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ ---
+        this.lastBallX = 0;
+        this.lastBallY = 0;
+        this.lastDecision = 0;
+        this.aggressiveTimer = 0;
+      }
+
+      // ================================================================
+      // УСТАНОВКА СЛОЖНОСТИ
+      // ================================================================
+      setDifficulty(difficulty) {
+        const config = CONFIG.DIFFICULTIES[difficulty] || CONFIG.DIFFICULTIES.MEDIUM;
+        this.reactionTime = config.reaction;    // Время реакции
+        this.errorMargin = config.error;        // Погрешность
+        this.aggression = config.aggression;    // Агрессивность (0-1)
+        this.difficulty = difficulty;           // Название уровня
+        this.difficultyLabel = config.label;    // Метка для отладки
+      }
+
+      // ================================================================
+      // ГЕНЕРАЦИЯ СЛУЧАЙНОГО ИНТЕРВАЛА (30-100 секунд)
+      // ================================================================
+      _randomInterval() {
+        const { MIN, MAX } = CONFIG.TACTIC_CHANGE;
+        return Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+      }
+
+      // ================================================================
+      // ВЫБОР СЛУЧАЙНОЙ ТАКТИКИ (с весами)
+      // ================================================================
+      _selectRandomTactic() {
+        // Доступные тактики
+        const tactics = ['defend', 'attack', 'bank', 'spin', 'fake'];
+        
+        // Веса тактик (зависят от агрессивности)
+        const weights = [
+          1.0,                                    // defend
+          0.6 * this.aggression,                  // attack
+          0.4 * this.aggression,                  // bank
+          0.3 * this.aggression,                  // spin
+          0.2 * this.aggression                   // fake
+        ];
+        
+        // При высокой агрессивности чаще атакуем
+        if (this.aggression > 0.7) {
+          weights[1] *= 1.5;  // attack
+          weights[2] *= 1.3;  // bank
+        }
+        
+        // Взвешенный случайный выбор
+        let total = weights.reduce((a, b) => a + b, 0);
+        let random = Math.random() * total;
+        
+        for (let i = 0; i < tactics.length; i++) {
+          random -= weights[i];
+          if (random <= 0) {
+            // Избегаем повторения той же тактики
+            if (this.tacticHistory.length > 3) {
+              const last = this.tacticHistory[this.tacticHistory.length - 1];
+              if (last === tactics[i] && Math.random() < 0.6) {
+                continue; // Пробуем другую тактику
+              }
+            }
+            this.tactic = tactics[i];
+            this.tacticHistory.push(tactics[i]);
+            if (this.tacticHistory.length > 10) {
+              this.tacticHistory.shift();
+            }
+            break;
+          }
+        }
+        
+        // Сбрасываем таймер
+        this.tacticTimer = 0;
+        this.tacticInterval = this._randomInterval();
+      }
+
+      // ================================================================
+      // ПРЕДСКАЗАНИЕ ПОЗИЦИИ МЯЧА
+      // ================================================================
+      _predictBall(ball, frames) {
+        // Простое линейное предсказание
+        return {
+          x: ball.x + ball.dx * frames,
+          y: ball.y + ball.dy * frames
+        };
+      }
+
+      // ================================================================
+      // РАСЧЁТ ЦЕЛЕВОЙ ПОЗИЦИИ (на основе тактики)
+      // ================================================================
+      _calculateTarget(ball, opponent, canvas) {
+        const width = canvas.width;
+        const height = canvas.height;
+        const pw = this.platform.width;
+        
+        // Базовый таргет — позиция мяча
+        let targetX = ball.x;
+        let targetY = this.platform.y;
+        let power = 1.0;        // Множитель силы удара
+        let spin = 0;           // Вращение
+        
+        // Центр платформы противника
+        const oppCenter = opponent.x + opponent.width / 2;
+        
+        // Выбираем тактику
+        switch (this.tactic) {
+          
+          case 'attack':
+            // Бьём в пустой угол
+            targetX = oppCenter < width / 2 ? width - 70 : 70;
+            power = 1.2;          // Сильный удар
+            break;
+            
+          case 'bank':
+            // Отскок от ближайшей стены
+            targetX = ball.x < width / 2 ? 25 : width - 25;
+            power = 0.9;
+            break;
+            
+          case 'spin':
+            // Удар с вращением (смещаемся в сторону)
+            const spinDir = ball.x < oppCenter ? 1 : -1;
+            targetX = oppCenter + (spinDir * 55);
+            spin = spinDir * 3 + (Math.random() - 0.5) * 2;
+            power = 0.85;
+            break;
+            
+          case 'fake':
+            // Фальшивый удар (показываем стену, бьём в центр)
+            targetX = ball.x < width / 2 ? 30 : width - 30;
+            spin = (ball.x < width / 2 ? 4 : -4);
+            power = 0.8;
+            break;
+            
+          case 'aggressive':
+            // Постоянное давление
+            targetX = oppCenter + (Math.random() - 0.5) * 30;
+            power = 1.3;
+            break;
+            
+          default: // defend
+            // Защита: под мячом с предсказанием
+            const predicted = this._predictBall(ball, CONFIG.PREDICTION_FRAMES);
+            targetX = predicted.x + (Math.random() - 0.5) * this.errorMargin;
+            power = 0.95;
+        }
+        
+        // Добавляем случайную ошибку (зависит от сложности)
+        targetX += (Math.random() - 0.5) * this.errorMargin * 0.5;
+        
+        // Ограничиваем, чтобы платформа не выходила за экран
+        targetX = Math.max(10, Math.min(width - pw - 10, targetX));
+        
+        return { x: targetX, y: targetY, power, spin };
+      }
+
+      // ================================================================
+      // ОГРАНИЧЕНИЕ ПОЗИЦИИ ПЛАТФОРМЫ
+      // ================================================================
+      _clampPlatform(canvas) {
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // По X
+        this.platform.x = Math.max(0, Math.min(width - this.platform.width, this.platform.x));
+        
+        // По Y (в зависимости от положения)
+        if (this.isTop) {
+          // Верхняя платформа
+          const maxY = height * 0.45 - this.platform.height;
+          this.platform.y = Math.max(5, Math.min(maxY, this.platform.y));
+        } else {
+          // Нижняя платформа
+          const minY = height * 0.55;
+          const maxY = height - this.platform.height - 5;
+          this.platform.y = Math.max(minY, Math.min(maxY, this.platform.y));
+        }
+      }
+
+      // ================================================================
+      // ОСНОВНОЙ МЕТОД ОБНОВЛЕНИЯ (вызывается каждый кадр)
+      // ================================================================
+      /**
+       * Обновляет состояние ИИ
+       * @param {Object} ball - Мяч { x, y, dx, dy }
+       * @param {Object} opponent - Платформа противника { x, width }
+       * @param {Object} canvas - { width, height }
+       * @param {number} frame - Счётчик кадров
+       * @param {boolean} isPlayerControlling - Управляет ли игрок платформой
+       * @returns {Object} { vx, vy, spin, power } - Скорость и эффекты
+       */
+      update(ball, opponent, canvas, frame, isPlayerControlling) {
+        // --- ПРОВЕРКА: ПЛАТФОРМА АКТИВНА? ---
+        if (!this.platform.active) {
+          return { vx: 0, vy: 0, spin: 0, power: 1.0 };
+        }
+
+        // --- УПРАВЛЕНИЕ: КТО УПРАВЛЯЕТ ПЛАТФОРМОЙ? ---
+        if (isPlayerControlling) {
+          // Игрок управляет — сбрасываем таймер
+          this.inactiveTimer = 0;
+          this.isActive = false;
+          // Запоминаем, что игрок управляет
+          return { vx: this.vx, vy: this.vy, spin: 0, power: 1.0 };
+        }
+        
+        // Игрок НЕ управляет — увеличиваем таймер
+        this.inactiveTimer++;
+        
+        // Если прошло 1 секунду бездействия — ИИ берёт управление
+        if (this.inactiveTimer >= CONFIG.INACTIVE_THRESHOLD && !this.isActive) {
+          this.isActive = true;
+          this.inactiveTimer = 0;
+        }
+        
+        // Если ИИ неактивен — ничего не делаем
+        if (!this.isActive) {
+          // Применяем инерцию для плавной остановки
+          this.vx *= 0.9;
+          this.vy *= 0.9;
+          this.platform.x += this.vx;
+          this.platform.y += this.vy;
+          this._clampPlatform(canvas);
+          return { vx: this.vx, vy: this.vy, spin: 0, power: 1.0 };
+        }
+
+        // --- ОБНОВЛЕНИЕ ТАКТИКИ (каждые 30-100 секунд) ---
+        this.tacticTimer++;
+        if (this.tacticTimer >= this.tacticInterval) {
+          this._selectRandomTactic();
+        }
+
+        // --- РАСЧЁТ ЦЕЛЕВОЙ ПОЗИЦИИ ---
+        const target = this._calculateTarget(ball, opponent, canvas);
+
+        // --- ДВИЖЕНИЕ К ЦЕЛИ С ИНЕРЦИЕЙ ---
+        const dx = target.x - this.platform.x;
+        const dy = (target.y || this.platform.y) - this.platform.y;
+        const distance = Math.hypot(dx, dy);
+        
+        // Сила следования зависит от расстояния
+        let follow = CONFIG.FOLLOW_BASE + distance * CONFIG.FOLLOW_FACTOR;
+        follow = Math.min(CONFIG.MAX_FOLLOW, follow);
+        
+        // Ускоряемся к цели
+        this.vx += dx * follow;
+        this.vy += dy * 0.05;  // Медленное вертикальное движение
+        
+        // Ограничиваем скорость
+        const speed = Math.hypot(this.vx, this.vy);
+        if (speed > CONFIG.MAX_SPEED) {
+          this.vx = (this.vx / speed) * CONFIG.MAX_SPEED;
+          this.vy = (this.vy / speed) * CONFIG.MAX_SPEED;
+        }
+        
+        // Применяем инерцию
+        this.vx *= CONFIG.INERTIA;
+        this.vy *= CONFIG.INERTIA;
+        
+        // Обновляем позицию
+        this.platform.x += this.vx;
+        this.platform.y += this.vy;
+        
+        // Ограничиваем позицию
+        this._clampPlatform(canvas);
+        
+        // --- ВОЗВРАЩАЕМ ДАННЫЕ ДЛЯ ФИЗИКИ ---
+        return {
+          vx: this.vx,
+          vy: this.vy,
+          spin: target.spin || 0,
+          power: target.power || 1.0
+        };
+      }
+
+      // ================================================================
+      // ПОЛУЧЕНИЕ ТЕКУЩЕЙ ТАКТИКИ (для отображения)
+      // ================================================================
+      getTactic() {
+        const names = CONFIG.TACTIC_NAMES;
+        return {
+          name: this.tactic,
+          displayName: names[this.tactic] || this.tactic,
+          difficulty: this.difficultyLabel,
+          aggression: Math.round(this.aggression * 100) + '%',
+          timer: Math.round(this.tacticTimer / 60) + 'с',
+          interval: Math.round(this.tacticInterval / 60) + 'с'
+        };
+      }
+
+      // ================================================================
+      // ПРИНУДИТЕЛЬНАЯ СМЕНА ТАКТИКИ (извне)
+      // ================================================================
+      forceTactic(tactic) {
+        const valid = ['defend', 'attack', 'bank', 'spin', 'fake', 'aggressive'];
+        if (valid.includes(tactic)) {
+          this.tactic = tactic;
+          this.tacticTimer = 0;
+          this.tacticInterval = this._randomInterval();
+        }
+      }
+    }
+
+    // ================================================================
+    // ПУБЛИЧНОЕ API МОДУЛЯ
+    // ================================================================
+    return {
+      // Класс для создания ИИ
+      AIPlayer: AIPlayer,
+      
+      // Конфигурация (для чтения)
+      CONFIG: CONFIG,
+      
+      // Уровни сложности
+      DIFFICULTIES: {
+        EASY: 'EASY',
+        MEDIUM: 'MEDIUM',
+        HARD: 'HARD',
+        EXPERT: 'EXPERT'
+      },
+      
+      // Тактики
+      TACTICS: {
+        DEFEND: 'defend',
+        ATTACK: 'attack',
+        BANK: 'bank',
+        SPIN: 'spin',
+        FAKE: 'fake',
+        AGGRESSIVE: 'aggressive'
+      },
+      
+      // Названия тактик
+      TACTIC_NAMES: CONFIG.TACTIC_NAMES
+    };
+
+  })(); // КОНЕЦ МОДУЛЯ AIModule
+
+
+  // ================================================================
+  // МОДУЛЬ 6: ОСНОВНАЯ ИГРА (ядро)
+  // ================================================================
+  // Этот модуль СВЯЗЫВАЕТ ВСЕ ОСТАЛЬНЫЕ МОДУЛИ ВМЕСТЕ.
+  // Он:
+  // - управляет игровым циклом (update → draw → requestAnimationFrame)
+  // - обрабатывает ввод с мыши/пальца
+  // - проверяет столкновения
+  // - засчитывает голы
+  // - обрабатывает уничтожение платформ
+  // - показывает экран победы (НЕ ОСТАНАВЛИВАЯ ИГРУ)
+  //
+  // МОДУЛЬНОСТЬ: ЭТОТ МОДУЛЬ НЕЛЬЗЯ РАЗРАБАТЫВАТЬ ОТДЕЛЬНО!
+  // Он зависит от всех остальных модулей.
+  // ================================================================
+
+  // --- ПОЛУЧАЕМ ХОЛСТ И КОНТЕКСТ РИСОВАНИЯ ---
+  const canvas = document.getElementById('game');  // Находим холст по ID
+  const ctx = canvas.getContext('2d');            // Контекст для рисования
+  canvas.width = window.innerWidth;               // Ширина = ширина экрана
+  canvas.height = window.innerHeight;             // Высота = высота экрана
+
+  // --- ПОЛУЧАЕМ ЭЛЕМЕНТЫ ИНТЕРФЕЙСА (UI) ---
+  const pScoreEl = document.getElementById('pScore');       // Счёт игрока
+  const aScoreEl = document.getElementById('aScore');       // Счёт AI
+  const pSizeEl = document.getElementById('pSize');         // Размер игрока
+  const aSizeEl = document.getElementById('aSize');         // Размер AI
+  const vScreen = document.getElementById('victory');       // Экран победы
+  const vMsg = document.getElementById('vMsg');             // Сообщение победы
+  const vSub = document.getElementById('vSub');             // Подзаголовок
+  const vBadge = document.getElementById('victoryBadge');   // Бейдж побед
+  const tacticBottomEl = document.getElementById('tacticBottom'); // Тактика нижней
+  const tacticTopEl = document.getElementById('tacticTop');       // Тактика верхней
+
+  // --- ПЕРЕМЕННЫЕ СОСТОЯНИЯ ИГРЫ ---
+  let score = { player: 0, ai: 0 };               // Счёт голов
+  let mouse = { x: 0, y: 0 };                     // Позиция мыши/пальца
+  let frame = 0;                                  // Счётчик кадров
+  let goalScored = false;                         // Флаг: был ли гол (защита от двойного гола)
+  let victoryDisplayTimer = null;                 // Таймер для скрытия экрана победы
+  let isPlayerControlling = false;                // Управляет ли игрок платформой
+
+  // --- ЗОНЫ ДВИЖЕНИЯ ПЛАТФОРМ ---
+  // Ограничиваем, где может двигаться каждая платформа.
+  const zones = {
+    player: { minY: canvas.height * 0.55, maxY: canvas.height - 20 },
+    ai: { minY: 10, maxY: canvas.height * 0.45 - 10 }
+  };
+
+  // --- ОБНОВЛЕНИЕ ЗОН ПРИ ИЗМЕНЕНИИ РАЗМЕРА ЭКРАНА ---
+  function updateZones() {
+    zones.player.minY = canvas.height * 0.55;
+    zones.player.maxY = canvas.height - 20;
+    zones.ai.minY = 10;
+    zones.ai.maxY = canvas.height * 0.45 - 10;
+  }
+
+  // --- ИЗМЕНЕНИЕ РАЗМЕРА ЭКРАНА ---
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    updateZones();
+  }
+  window.addEventListener('resize', resize);
+
+  // --- ИНИЦИАЛИЗАЦИЯ ЗВУКА (при клике/касании) ---
+  function initSound() {
+    sound.init();
+    sound.ensure();
+  }
+  canvas.addEventListener('click', initSound);
+  canvas.addEventListener('touchstart', initSound);
+  document.addEventListener('keydown', initSound);
+  
+  // Периодическая проверка звука (если "уснул" — пробуждаем)
+  setInterval(() => {
+    if (sound.ctx && sound.ctx.state === 'suspended') {
+      sound.ensure();
+    }
+  }, 5000);
+
+  // --- УПРАВЛЕНИЕ МЫШЬЮ/ПАЛЬЦЕМ ---
+  canvas.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    initSound();
+  });
+  
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    mouse.x = e.touches[0].clientX;
+    mouse.y = e.touches[0].clientY;
+    initSound();
+  }, { passive: false });
+
+
+  // ================================================================
+  // СОЗДАНИЕ ИИ ДЛЯ ОБЕИХ ПЛАТФОРМ
+  // ================================================================
+  // Верхняя платформа (AI) — всегда под контролем ИИ
+  const aiTop = new AIModule.AIPlayer(
+    PlatformModule.ai,
+    true,
+    'MEDIUM'
+  );
+
+  // Нижняя платформа (игрок) — ИИ управляет, если игрок не активен
+  const aiBottom = new AIModule.AIPlayer(
+    PlatformModule.player,
+    false,
+    'MEDIUM'
+  );
+
+
+  // ================================================================
+  // ОБНОВЛЕНИЕ ИНТЕРФЕЙСА (UI)
+  // ================================================================
+  function updateUI() {
+    const P = PlatformModule.player;
+    const A = PlatformModule.ai;
+    
+    // Обновляем счёт
+    pScoreEl.textContent = score.player;
+    aScoreEl.textContent = score.ai;
+    
+    // Обновляем размеры
+    pSizeEl.textContent = P.active ? `${Math.round(P.sizePercent)}%` : '💀';
+    aSizeEl.textContent = A.active ? `${Math.round(A.sizePercent)}%` : '💀';
+    
+    // Цвет размера: если платформа жива — цветной, если нет — красный
+    pSizeEl.style.color = P.active ? '#00ccff' : '#ff4444';
+    aSizeEl.style.color = A.active ? '#ff44ff' : '#ff4444';
+    
+    // Обновляем бейдж побед
+    const pv = PlatformModule.getPlayerVictories();
+    const av = PlatformModule.getAIVictories();
+    if (pv > 0 || av > 0) {
+      vBadge.style.display = 'inline';
+      vBadge.textContent = `🏆 ${pv}:${av}`;
+    }
+    
+    // Обновляем тактики в UI
+    const topTactic = aiTop.getTactic();
+    const bottomTactic = aiBottom.getTactic();
+    tacticTopEl.textContent = topTactic.displayName;
+    tacticBottomEl.textContent = bottomTactic.displayName;
+  }
+
+
+  // ================================================================
+  // ПОКАЗ СООБЩЕНИЯ ПОБЕДЫ (НЕ ОСТАНАВЛИВАЕТ ИГРУ!)
+  // ================================================================
+  function showVictoryMessage(message, color, subMessage) {
+    vMsg.textContent = message;
+    vMsg.style.color = color;
+    vMsg.style.textShadow = `0 0 30px ${color}`;
+    vSub.textContent = subMessage || '+10% к здоровью';
+    vScreen.style.display = 'block';  // Показываем экран победы
+    
+    // Автоматически скрываем через 2 секунды (игра продолжается!)
+    if (victoryDisplayTimer) clearTimeout(victoryDisplayTimer);
+    victoryDisplayTimer = setTimeout(() => {
+      vScreen.style.display = 'none';
+      victoryDisplayTimer = null;
+    }, 2000);
+  }
+
+
+  // ================================================================
+  // ОБРАБОТКА УНИЧТОЖЕНИЯ ПЛАТФОРМЫ
+  // ================================================================
+  function handlePlatformDestroy(platform, isPlayer) {
+    // Определяем победителя и проигравшего
+    const winner = isPlayer ? PlatformModule.ai : PlatformModule.player;
+    const loser = platform;
+    
+    // --- 1. УВЕЛИЧИВАЕМ СЧЁТЧИК ПОБЕД ---
+    if (isPlayer) {
+      // Игрок уничтожен → AI победил
+      PlatformModule.victoryCount.ai++;
+      PlatformModule.ai.victories++;
+    } else {
+      // AI уничтожен → Игрок победил
+      PlatformModule.victoryCount.player++;
+      PlatformModule.player.victories++;
+    }
+    
+    // --- 2. ПОБЕДИТЕЛЬ ПОЛУЧАЕТ +10% К ЗДОРОВЬЮ ---
+    const bonusPercent = PlatformModule.config.victoryBonus;
+    const newSize = Math.min(
+      PlatformModule.config.maxSize,
+      winner.sizePercent + bonusPercent
+    );
+    winner.sizePercent = newSize;
+    PlatformModule.updatePlatformSize(winner);
+    
+    // --- 3. ПРОИГРАВШИЙ ВОСКРЕШАЕТСЯ СО 100% ЗДОРОВЬЯ ---
+    loser.active = true;
+    loser.sizePercent = 100;
+    loser.width = loser.originalWidth;
+    loser.height = loser.originalHeight;
+    loser.hits = 0;
+    loser.vx = 0;
+    loser.vy = 0;
+    
+    // Центрируем по X
+    loser.x = canvas.width / 2 - loser.width / 2;
+    
+    // Возвращаем на исходную позицию по Y
+    if (isPlayer) {
+      // Нижняя платформа
+      loser.y = canvas.height - 70;
+    } else {
+      // Верхняя платформа
+      loser.y = 70;
+    }
+    
+    // --- 4. ВОРОТА НЕ СБРАСЫВАЕМ! Оставляем как есть ---
+    // НЕТ GoalModule.resetPlayerGoal()
+    // НЕТ GoalModule.resetAIGoal()
+    
+    // --- 5. ЗВУК ПОБЕДЫ ---
+    sound.victory();
+    
+    // --- 6. ПОКАЗЫВАЕМ СООБЩЕНИЕ ---
+    const msg = isPlayer ? '🤖 AI ПОБЕДИЛ!' : '👤 ИГРОК ПОБЕДИЛ!';
+    const color = isPlayer ? '#ff44ff' : '#00ccff';
+    const bonusMsg = `+10% к здоровью (теперь ${Math.round(winner.sizePercent)}%)`;
+    showVictoryMessage(msg, color, bonusMsg);
+    
+    // --- 7. ОБНОВЛЯЕМ UI ---
+    updateUI();
+  }
+
+
+  // ================================================================
+  // ОСНОВНОЙ ИГРОВОЙ ЦИКЛ (update)
+  // ================================================================
+  // Эта функция вызывается КАЖДЫЙ КАДР (60 раз в секунду).
+  // Она обновляет всю логику игры.
+  // ================================================================
+  function update() {
+    frame++;  // Увеличиваем счётчик кадров
+
+    // --- ПОЛУЧАЕМ ДАННЫЕ ИЗ МОДУЛЕЙ ---
+    const P = PlatformModule.player;
+    const A = PlatformModule.ai;
+    const ball = BallPhysics.getBall();
+    const radius = BallPhysics.getRadius();
+    const pRect = PlatformModule.getPlayerRect();
+    const aRect = PlatformModule.getAIRect();
+
+    // --- ПРОВЕРЯЕМ, УПРАВЛЯЕТ ЛИ ИГРОК ---
+    // Игрок управляет, если мышь/палец в нижней половине экрана
+    isPlayerControlling = (mouse.y > canvas.height * 0.5) && 
+                          (mouse.x !== 0 || mouse.y !== 0) &&
+                          P.active;
+
+    // --- ОБНОВЛЕНИЕ ИИ ДЛЯ ВЕРХНЕЙ ПЛАТФОРМЫ ---
+    // Верхняя платформа ВСЕГДА под контролем ИИ
+    const resultTop = aiTop.update(
+      ball,
+      { x: P.x, width: P.width || PlatformModule.config.width },
+      { width: canvas.width, height: canvas.height },
+      frame,
+      false  // Игрок никогда не управляет верхней платформой
+    );
+
+    // --- ОБНОВЛЕНИЕ ИИ ДЛЯ НИЖНЕЙ ПЛАТФОРМЫ ---
+    // Нижняя платформа: ИИ управляет, если игрок не активен
+    const resultBottom = aiBottom.update(
+      ball,
+      { x: A.x, width: A.width || PlatformModule.config.width },
+      { width: canvas.width, height: canvas.height },
+      frame,
+      isPlayerControlling
+    );
+
+    // --- УСТАНАВЛИВАЕМ СКОРОСТИ ПЛАТФОРМ (для передачи мячу) ---
+    if (isPlayerControlling) {
+      // Игрок управляет — скорость от движения мыши (вычисляем через дельту)
+      // Для простоты оставляем 0, так как точная скорость не критична
+      PlatformModule.setSpeeds(0, 0, resultTop.vx, resultTop.vy);
+    } else {
+      // ИИ управляет — используем скорости от ИИ
+      PlatformModule.setSpeeds(resultBottom.vx, resultBottom.vy, resultTop.vx, resultTop.vy);
+    }
+
+    // --- ПОЗИЦИИ ПЛАТФОРМ ---
+    if (isPlayerControlling && P.active) {
+      // Игрок управляет — переопределяем позицию
+      const pw = P.width || PlatformModule.config.width;
+      const playerX = Math.max(0, Math.min(canvas.width - pw, mouse.x - pw / 2));
+      const playerY = Math.max(zones.player.minY, Math.min(zones.player.maxY, mouse.y - 40));
+      PlatformModule.setPositions(playerX, playerY, A.x, A.y);
+    } else {
+      // ИИ уже установил позиции через aiBottom.update()
+      // Просто синхронизируем
+      PlatformModule.setPositions(P.x, P.y, A.x, A.y);
+    }
+
+    // Обновляем прямоугольники для физики
+    const pRectNew = PlatformModule.getPlayerRect();
+    const aRectNew = PlatformModule.getAIRect();
+
+    // --- ДВИЖЕНИЕ МЯЧА ---
+    BallPhysics.move();
+
+    // --- СТЕНЫ (только вертикальные, левая и правая) ---
+    if (ball.x <= 0 || ball.x >= canvas.width) {
+      BallPhysics.reflectWallX();  // Отскок от стены
+      sound.wall();                // Звук удара о стену
+    }
+
+    // ============================================================
+    // ПРОВЕРКА ВОРОТ (НИЖНИЕ — ИГРОК)
+    // ============================================================
+    // Если мяч достиг нижней границы экрана
+    if (ball.y + radius >= canvas.height && !goalScored) {
+      const result = GoalModule.checkPlayerGoal(ball, canvas.width);
+
+      if (result.isGoal) {
+        // ✅ ГОЛ! AI забивает игроку
+        score.ai++;
+        // Уменьшаем платформу игрока на 3% (при голе)
+        const destroyed = PlatformModule.decreasePlatform(P, PlatformModule.config.goalDecrease,
+          (p) => { handlePlatformDestroy(p, true); });
+        // Закрываем ворота
+        GoalModule.resetPlayerGoal();
+        sound.goalA();
+        updateUI();
+
+        // МЯЧ ОТСКАКИВАЕТ (как от стены)
+        BallPhysics.setPosition(ball.x, canvas.height - radius);
+        const b = BallPhysics.getBall();
+        BallPhysics.setSpeed(b.dx, -Math.abs(b.dy));
+
+      } else {
+        // Попал в закрытую часть — открываем ворота на 5%
+        GoalModule.handleBlockedPlayerHit();
+        sound.wall();
+        // Отскок
+        BallPhysics.setPosition(ball.x, canvas.height - radius);
+        const b = BallPhysics.getBall();
+        BallPhysics.setSpeed(b.dx, -Math.abs(b.dy));
+      }
+    }
+
+    // ============================================================
+    // ПРОВЕРКА ВОРОТ (ВЕРХНИЕ — AI)
+    // ============================================================
+    // Если мяч достиг верхней границы экрана
+    if (ball.y - radius <= 0 && !goalScored) {
+      const result = GoalModule.checkAIGoal(ball, canvas.width);
+
+      if (result.isGoal) {
+        // ✅ ГОЛ! Игрок забивает AI
+        score.player++;
+        // Уменьшаем платформу AI на 3% (при голе)
+        const destroyed = PlatformModule.decreasePlatform(A, PlatformModule.config.goalDecrease,
+          (p) => { handlePlatformDestroy(p, false); });
+        GoalModule.resetAIGoal();
+        sound.goalP();
+        updateUI();
+
+        // МЯЧ ОТСКАКИВАЕТ (как от стены)
+        BallPhysics.setPosition(ball.x, radius);
+        const b = BallPhysics.getBall();
+        BallPhysics.setSpeed(b.dx, Math.abs(b.dy));
+
+      } else {
+        // Попал в закрытую часть — открываем ворота на 5%
+        GoalModule.handleBlockedAIHit();
+        sound.wall();
+        // Отскок
+        BallPhysics.setPosition(ball.x, radius);
+        const b = BallPhysics.getBall();
+        BallPhysics.setSpeed(b.dx, Math.abs(b.dy));
+      }
+    }
+
+    // ============================================================
+    // СТОЛКНОВЕНИЕ С ПЛАТФОРМОЙ ИГРОКА
+    // ============================================================
+    if (P.active && BallPhysics.checkCollisionRect(pRectNew)) {
+      // Получаем скорость платформы
+      const speed = PlatformModule.getPlayerSpeed();
+      
+      // Отскок от изогнутой платформы с передачей скорости
+      BallPhysics.reflectFromCurve(
+        pRectNew.x, pRectNew.y, pRectNew.width, pRectNew.height,
+        PlatformModule.config.amplitude, true,
+        speed.vx, speed.vy
+      );
+      sound.hitP();
+      
+      // Уменьшаем платформу на 1% (при ударе)
+      PlatformModule.decreasePlatform(P, PlatformModule.config.hitDecrease,
+        (p) => { handlePlatformDestroy(p, true); });
+      
+      // Закрываем ворота на 2%
+      GoalModule.handlePlatformHitPlayer();
+      updateUI();
+    }
+
+    // ============================================================
+    // СТОЛКНОВЕНИЕ С ПЛАТФОРМОЙ AI
+    // ============================================================
+    if (A.active && BallPhysics.checkCollisionRect(aRectNew)) {
+      // Получаем скорость платформы
+      const speed = PlatformModule.getAISpeed();
+      
+      BallPhysics.reflectFromCurve(
+        aRectNew.x, aRectNew.y, aRectNew.width, aRectNew.height,
+        PlatformModule.config.amplitude, false,
+        speed.vx, speed.vy
+      );
+      sound.hitA();
+      
+      PlatformModule.decreasePlatform(A, PlatformModule.config.hitDecrease,
+        (p) => { handlePlatformDestroy(p, false); });
+      
+      GoalModule.handlePlatformHitAI();
+      updateUI();
+    }
+  }
+
+
+  // ================================================================
+  // ОТРИСОВКА (draw)
+  // ================================================================
+  // Эта функция рисует всё на экране КАЖДЫЙ КАДР.
+  // ================================================================
+  function draw() {
+    // --- 1. ФОН ---
+    ctx.fillStyle = '#0a0a0a';  // Тёмно-серый (почти чёрный)
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // --- 2. ЦЕНТРАЛЬНАЯ ЛИНИЯ (пунктирная) ---
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.setLineDash([8, 12]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height / 2);
+    ctx.lineTo(canvas.width, canvas.height / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // --- 3. ПОЛУПРОЗРАЧНЫЕ ЗОНЫ ---
+    // Верхняя (AI) — малиновая
+    ctx.fillStyle = 'rgba(255,68,255,0.04)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.45);
+    // Нижняя (игрок) — голубая
+    ctx.fillStyle = 'rgba(0,204,255,0.04)';
+    ctx.fillRect(0, canvas.height * 0.55, canvas.width, canvas.height * 0.45);
+
+    // --- 4. ВОРОТА ---
+    GoalModule.drawAIGoal(ctx, canvas.width);           // Верхние (AI)
+    GoalModule.drawPlayerGoal(ctx, canvas.width, canvas.height); // Нижние (игрок)
+
+    // --- 5. ИНДИКАТОРЫ РАЗМЕРА ПЛАТФОРМ (полоски) ---
+    const P = PlatformModule.player;
+    const A = PlatformModule.ai;
+    if (P.active) {
+      GoalModule.drawSizeIndicator(ctx, 10, canvas.height - 25, P.sizePercent, '#00ccff');
+    }
+    if (A.active) {
+      GoalModule.drawSizeIndicator(ctx, 10, 12, A.sizePercent, '#ff44ff');
+    }
+
+    // --- 6. ИНДИКАТОРЫ ОТКРЫТИЯ ВОРОТ (проценты) ---
+    const pg = GoalModule.getPlayerGoal();
+    const ag = GoalModule.getAIGoal();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`В:${Math.round(pg.openingPercent)}%`, 100, canvas.height - 12);
+    ctx.fillText(`В:${Math.round(ag.openingPercent)}%`, 100, 22);
+
+    // --- 7. СЧЁТЧИК ПОБЕД (в правом верхнем углу) ---
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    const pv = PlatformModule.getPlayerVictories();
+    const av = PlatformModule.getAIVictories();
+    ctx.fillText(`🏆 ${pv} : ${av}`, canvas.width - 20, 30);
+
+    // --- 8. ПЛАТФОРМЫ (скобки) ---
+    PlatformModule.draw(ctx);
+
+    // --- 9. МЯЧ ---
+    BallPhysics.draw(ctx);
+    
+    // --- 10. ИНДИКАТОР УПРАВЛЕНИЯ (кто управляет нижней платформой) ---
+    if (P.active) {
+      ctx.fillStyle = isPlayerControlling ? 'rgba(0,204,255,0.3)' : 'rgba(255,68,255,0.3)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      const controlText = isPlayerControlling ? '👤 ИГРОК' : '🤖 ИИ';
+      ctx.fillText(controlText, 10, canvas.height - 8);
+    }
+  }
+
+
+  // ================================================================
+  // ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ (gameLoop)
+  // ================================================================
+  // Эта функция запускает бесконечный цикл игры.
+  // Она вызывается 60 раз в секунду (requestAnimationFrame).
+  // НИКОГДА НЕ ОСТАНАВЛИВАЕТСЯ!
+  // ================================================================
+  function gameLoop() {
+    update();  // Обновляем логику игры
+    draw();    // Рисуем кадр
+    requestAnimationFrame(gameLoop); // Запрашиваем следующий кадр
+  }
+
+
+  // ================================================================
+  // ЗАПУСК ИГРЫ
+  // ================================================================
+  
+  // --- Сбрасываем мяч в центр ---
+  BallPhysics.reset(canvas.width, canvas.height);
+
+  // --- Устанавливаем начальные позиции платформ ---
+  PlatformModule.player.x = canvas.width / 2 - PlatformModule.config.width / 2;
+  PlatformModule.player.y = canvas.height - 70;
+  PlatformModule.ai.x = canvas.width / 2 - PlatformModule.config.width / 2;
+  PlatformModule.ai.y = 70;
+
+  // --- Обновляем интерфейс ---
+  updateUI();
+
+  // --- ЗАПУСКАЕМ ИГРОВОЙ ЦИКЛ (БЕСКОНЕЧНЫЙ!) ---
+  gameLoop();
+
+  // --- Инициализация звука через 0.5 секунды ---
+  setTimeout(() => {
+    sound.init();
+    sound.ensure();
+  }, 500);
+
+  // ================================================================
+  // КОНЕЦ КОДА
+  // ================================================================
+  </script>
+</body>
+</html>

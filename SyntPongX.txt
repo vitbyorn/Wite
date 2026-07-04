@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎹 NEON SYNTH STUDIO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: #00ffcc;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 12px;
+            overflow-x: hidden;
+        }
+
+        /* ===== НЕОНОВЫЙ ТУМАН (фон) ===== */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 50%, rgba(0, 255, 200, 0.04) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(255, 0, 200, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 20%, rgba(0, 100, 255, 0.03) 0%, transparent 40%);
+            z-index: 0;
+            pointer-events: none;
+            animation: fogPulse 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes fogPulse {
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(1.1) rotate(3deg);
+                opacity: 1;
+            }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 200, 0.15);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 0 60px rgba(0, 255, 200, 0.05), inset 0 0 60px rgba(0, 255, 200, 0.02);
+        }
+
+        /* ===== ШАПКА ===== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.08);
+            padding-bottom: 12px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            letter-spacing: 4px;
+            text-shadow: 0 0 30px rgba(0, 255, 200, 0.15);
+            background: linear-gradient(90deg, #00ffcc, #ff44aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .status {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header .status .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+
+        .header .status .dot.off {
+            background: #ff4444;
+            box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+        }
+
+        .header .status .dot.on {
+            background: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            animation: dotPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes dotPulse {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+        .btn-neon {
+            background: rgba(0, 255, 200, 0.08);
+            border: 1px solid rgba(0, 255, 200, 0.25);
+            color: #00ffcc;
+            padding: 6px 20px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.25s;
+            text-shadow: 0 0 10px rgba(0, 255, 200, 0.1);
+        }
+
+        .btn-neon:hover {
+            background: rgba(0, 255, 200, 0.15);
+            border-color: #00ffcc;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.08);
+            transform: scale(1.02);
+        }
+
+        .btn-neon.active {
+            background: rgba(0, 255, 200, 0.2);
+            border-color: #00ffcc;
+        }
+
+        .btn-neon.danger {
+            border-color: rgba(255, 68, 68, 0.3);
+            color: #ff6666;
+        }
+
+        .btn-neon.danger:hover {
+            background: rgba(255, 68, 68, 0.12);
+            border-color: #ff4444;
+        }
+
+        /* ===== СЕКЦИИ ===== */
+        .section {
+            background: rgba(20, 20, 30, 0.5);
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            backdrop-filter: blur(4px);
+        }
+
+        .section-title {
+            font-size: 12px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(0, 255, 200, 0.4);
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.05);
+            padding-bottom: 6px;
+        }
+
+        /* ===== ЗАГРУЗЧИК ===== */
+        .upload-zone {
+            border: 2px dashed rgba(0, 255, 200, 0.12);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s;
+            background: rgba(0, 255, 200, 0.02);
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(0, 255, 200, 0.25);
+            background: rgba(0, 255, 200, 0.04);
+        }
+
+        .upload-zone input[type="file"] {
+            display: none;
+        }
+
+        .upload-zone .file-label {
+            background: rgba(0, 255, 200, 0.08);
+            padding: 6px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            border: 1px solid rgba(0, 255, 200, 0.1);
+        }
+
+        .upload-zone .file-label:hover {
+            background: rgba(0, 255, 200, 0.15);
+        }
+
+        .upload-zone .file-name {
+            color: #666;
+            font-size: 12px;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .upload-zone .file-name.loaded {
+            color: #00ff88;
+        }
+
+        .upload-zone .file-controls {
+            display: none;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .upload-zone .file-controls.show {
+            display: flex;
+        }
+
+        .upload-zone .file-controls label {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .upload-zone .file-controls input[type="range"] {
+            width: 70px;
+            background: rgba(255, 255, 255, 0.05);
+            height: 3px;
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .upload-zone .file-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ffcc;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.3);
+        }
+
+        .upload-zone .file-controls .val {
+            color: #00ffcc;
+            font-size: 11px;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        .upload-zone .file-controls input[type="checkbox"] {
+            accent-color: #00ffcc;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* ===== ГРИД-КОНТРОЛЛЕР (Launchpad) ===== */
+        .grid-controller {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .grid-btn {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 200, 0.08);
+            background: rgba(0, 255, 200, 0.03);
+            cursor: pointer;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.12s;
+            color: rgba(255, 255, 255, 0.15);
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 200, 0.05);
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(0, 255, 200, 0.05) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .grid-btn:hover::before {
+            opacity: 1;
+        }
+
+        .grid-btn:hover {
+            border-color: rgba(0, 255, 200, 0.2);
+            transform: scale(1.03);
+        }
+
+        .grid-btn:active,
+        .grid-btn.active {
+            transform: scale(0.92);
+            border-color: rgba(0, 255, 200, 0.4);
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.1);
+        }
+
+        .grid-btn .label {
+            position: absolute;
+            bottom: 4px;
+            right: 6px;
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.08);
+            letter-spacing: 1px;
+        }
+
+        .grid-btn .freq-label {
+            position: absolute;
+            top: 4px;
+            left: 6px;
+            font-size: 7px;
+            color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Цвета для кнопок по рядам */
+        .grid-btn[data-row="0"] {
+            border-color: rgba(0, 255, 200, 0.12);
+        }
+        .grid-btn[data-row="1"] {
+            border-color: rgba(255, 0, 200, 0.12);
+        }
+        .grid-btn[data-row="2"] {
+            border-color: rgba(255, 200, 0, 0.12);
+        }
+        .grid-btn[data-row="3"] {
+            border-color: rgba(0, 100, 255, 0.12);
+        }
+
+        .grid-btn.active[data-row="0"] {
+            background: rgba(0, 255, 200, 0.15);
+            border-color: #00ffcc;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.15);
+        }
+        .grid-btn.active[data-row="1"] {
+            background: rgba(255, 0, 200, 0.15);
+            border-color: #ff00cc;
+            box-shadow: 0 0 30px rgba(255, 0, 200, 0.15);
+        }
+        .grid-btn.active[data-row="2"] {
+            background: rgba(255, 200, 0, 0.15);
+            border-color: #ffcc00;
+            box-shadow: 0 0 30px rgba(255, 200, 0, 0.15);
+        }
+        .grid-btn.active[data-row="3"] {
+            background: rgba(0, 100, 255, 0.15);
+            border-color: #0066ff;
+            box-shadow: 0 0 30px rgba(0, 100, 255, 0.15);
+        }
+
+        /* ===== КОМБИНАТОР ===== */
+        .combo-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 700px) {
+            .combo-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .combo-group {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .combo-group .row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .combo-group .row label {
+            font-size: 11px;
+            color: #888;
+            min-width: 55px;
+        }
+
+        .combo-group .row input[type="range"] {
+            flex: 1;
+            min-width: 60px;
+            background: rgba(255, 255, 255, 0.05);
+            height: 3px;
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .combo-group .row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ffcc;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.2);
+        }
+
+        .combo-group .row .val {
+            color: #00ffcc;
+            font-size: 11px;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        .combo-group .row select {
+            background: rgba(0, 0, 0, 0.4);
+            color: #00ffcc;
+            border: 1px solid rgba(0, 255, 200, 0.1);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .combo-group .row select:focus {
+            outline: none;
+            border-color: rgba(0, 255, 200, 0.3);
+        }
+
+        .combo-group .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .combo-group .btn-group .btn-neon {
+            font-size: 11px;
+            padding: 4px 14px;
+        }
+
+        /* ===== ПОСЛЕДОВАТЕЛЬНОСТЬ ===== */
+        .sequence-steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .seq-step {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 255, 200, 0.08);
+            background: rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #444;
+            transition: all 0.15s;
+            position: relative;
+        }
+
+        .seq-step:hover {
+            border-color: rgba(0, 255, 200, 0.2);
+        }
+
+        .seq-step.active {
+            border-color: #00ffcc;
+            background: rgba(0, 255, 200, 0.1);
+            color: #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.05);
+        }
+
+        .seq-step .remove-step {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            font-size: 8px;
+            color: #ff4444;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .seq-step:hover .remove-step {
+            opacity: 1;
+        }
+
+        /* ===== КОД ===== */
+        .code-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        .code-box .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .code-box .code-header span {
+            font-size: 11px;
+            color: #666;
+            letter-spacing: 1px;
+        }
+
+        .code-box pre {
+            color: #88ddff;
+            font-size: 11px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            max-height: 140px;
+            overflow-y: auto;
+            margin: 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .code-box pre::-webkit-scrollbar {
+            width: 4px;
+        }
+        .code-box pre::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 200, 0.15);
+            border-radius: 2px;
+        }
+
+        /* ===== ПРЕСЕТЫ ===== */
+        .preset-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .preset-grid .preset-btn {
+            background: rgba(0, 255, 200, 0.04);
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            color: #888;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-grid .preset-btn:hover {
+            background: rgba(0, 255, 200, 0.08);
+            border-color: rgba(0, 255, 200, 0.15);
+            color: #00ffcc;
+        }
+
+        /* ===== АНИМАЦИЯ ДЛЯ ТУМАНА ===== */
+        .glow-ring {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(60px);
+            opacity: 0.15;
+            animation: ringFloat 12s ease-in-out infinite alternate;
+        }
+
+        @keyframes ringFloat {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                transform: translate(20px, -20px) scale(1.1);
+            }
+        }
+
+        /* ===== АДАПТИВ ===== */
+        @media (max-width: 600px) {
+            .container {
+                padding: 12px;
+            }
+            .header h1 {
+                font-size: 17px;
+                letter-spacing: 2px;
+            }
+            .grid-controller {
+                max-width: 100%;
+                gap: 4px;
+            }
+            .grid-btn {
+                font-size: 16px;
+                border-radius: 8px;
+            }
+            .upload-zone {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .upload-zone .file-controls {
+                margin-left: 0;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- ШАПКА -->
+        <div class="header">
+            <h1>✦ NEON SYNTH</h1>
+            <div class="status">
+                <span class="dot off" id="statusDot"></span>
+                <span id="statusText">Ожидание</span>
+                <button class="btn-neon" id="activateBtn">▶ Активировать</button>
+            </div>
+        </div>
+
+        <!-- ===== ЗАГРУЗЧИК ===== -->
+        <div class="section">
+            <div class="section-title">📁 ЗАГРУЗКА ЗВУКОВ</div>
+            <div class="upload-zone">
+                <label class="file-label" for="soundFileInput">📂 Выбрать файл</label>
+                <input type="file" id="soundFileInput" accept=".wav,.mp3,.ogg,.aac,.flac,.m4a">
+                <span class="file-name" id="fileName">Файл не выбран</span>
+                <div class="file-controls" id="fileControls">
+                    <label>Громкость</label>
+                    <input type="range" min="0" max="1" step="0.05" value="0.5" id="fileVol">
+                    <span class="val" id="fileVolVal">0.50</span>
+                    <label>Скорость</label>
+                    <input type="range" min="0.1" max="3" step="0.05" value="1" id="fileRate">
+                    <span class="val" id="fileRateVal">1.00</span>
+                    <label>Петля</label>
+                    <input type="checkbox" id="fileLoop">
+                    <button class="btn-neon" id="playFileBtn" style="display:none;">▶ Play</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== ГРИД-КОНТРОЛЛЕР (Launchpad) ===== -->
+        <div class="section">
+            <div class="section-title">🎛️ LAUNCHPAD (16 кнопок)</div>
+            <div class="grid-controller" id="gridController">
+                <!-- Кнопки генерируются через JS -->
+            </div>
+            <div style="text-align:center;margin-top:8px;font-size:10px;color:#444;letter-spacing:1px;">
+                клик — звук · shift+клик — сохранить в комбо
+            </div>
+        </div>
+
+        <!-- ===== КОМБИНАТОР ===== -->
+        <div class="section">
+            <div class="section-title">🧩 КОМБИНАТОР ЗВУКОВ</div>
+            <div class="combo-section">
+                <!-- Левая панель: настройки -->
+                <div class="combo-group">
+                    <div class="row">
+                        <label>Режим</label>
+                        <select id="comboMode">
+                            <option value="chord">Аккорд</option>
+                            <option value="sequence">Последовательность</option>
+                            <option value="arpeggio">Арпеджио</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>Интервал</label>
+                        <select id="comboInterval">
+                            <option value="0">Унисон (0)</option>
+                            <option value="4">Терция +4</option>
+                            <option value="3">Терция -3</option>
+                            <option value="7">Квинта +7</option>
+                            <option value="12">Октава +12</option>
+                            <option value="-12">Октава -12</option>
+                            <option value="5">Кварта +5</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>Голосов</label>
+                        <select id="comboVoices">
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>Задержка</label>
+                        <input type="range" min="20" max="400" value="120" step="5" id="comboDelay">
+                        <span class="val" id="comboDelayVal">120</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-neon" id="playComboBtn">▶ Играть комбо</button>
+                        <button class="btn-neon" id="addComboToSeq">➕ В последовательность</button>
+                        <button class="btn-neon danger" id="clearComboBtn">✕ Очистить</button>
+                    </div>
+                </div>
+
+                <!-- Правая панель: последовательность -->
+                <div class="combo-group">
+                    <div class="row">
+                        <label>Последовательность</label>
+                        <span style="font-size:10px;color:#666;" id="seqCount">0 нот</span>
+                    </div>
+                    <div class="sequence-steps" id="sequenceSteps">
+                        <!-- Генерируется через JS -->
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-neon" id="playSeqBtn">▶ Играть последовательность</button>
+                        <button class="btn-neon" id="clearSeqBtn">✕ Очистить</button>
+                        <button class="btn-neon" id="copySeqBtn">📋 Код</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== ПРЕСЕТЫ ===== -->
+        <div class="section">
+            <div class="section-title">🎯 БЫСТРЫЕ ПРЕСЕТЫ</div>
+            <div class="preset-grid" id="presetGrid">
+                <button class="preset-btn" data-preset="hitPlayer">Бац!</button>
+                <button class="preset-btn" data-preset="hitAI">Боц!</button>
+                <button class="preset-btn" data-preset="wall">Тык!</button>
+                <button class="preset-btn" data-preset="goalPlayer">Дзынь!</button>
+                <button class="preset-btn" data-preset="goalAI">Пыщ!</button>
+                <button class="preset-btn" data-preset="boost">Вау!</button>
+                <button class="preset-btn" data-preset="spin">Вжжик</button>
+                <button class="preset-btn" data-preset="spark">Искры</button>
+                <button class="preset-btn" data-preset="chord_major">Мажор</button>
+                <button class="preset-btn" data-preset="chord_minor">Минор</button>
+            </div>
+        </div>
+
+        <!-- ===== КОД ===== -->
+        <div class="section">
+            <div class="section-title">📋 КОД ДЛЯ ВСТАВКИ В ИГРУ</div>
+            <div class="code-box">
+                <div class="code-header">
+                    <span>Сгенерированный код</span>
+                    <button class="btn-neon" id="copyAllCodeBtn">📋 Копировать всё</button>
+                </div>
+                <pre id="codeOutput">// Нажми "Копировать всё" или создай комбинацию</pre>
+            </div>
+        </div>
+
+        <div style="text-align:center;font-size:10px;color:#333;margin-top:8px;letter-spacing:1px;">
+            ⚡ NEON SYNTH STUDIO v3.0 · 8-битный звук + загрузка файлов
+        </div>
+    </div>
+
+    <script>
+        // ================================================================
+        //  ЯДРО СИНТЕЗАТОРА
+        // ================================================================
+        const Synth = (function() {
+            let ctx = null;
+            let active = false;
+
+            function init() {
+                try {
+                    if (!ctx) {
+                        ctx = new(window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (ctx.state === 'suspended') ctx.resume();
+                    active = (ctx.state === 'running');
+                    updateUI();
+                    return active;
+                } catch (e) {
+                    active = false;
+                    updateUI();
+                    return false;
+                }
+            }
+
+            function updateUI() {
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                if (active) {
+                    dot.className = 'dot on';
+                    text.textContent = '✅ Готово';
+                } else {
+                    dot.className = 'dot off';
+                    text.textContent = '🔇 Нажми "Активировать"';
+                }
+            }
+
+            // Базовое воспроизведение
+            function play(freq, dur, type, vol) {
+                if (!active && !init()) return;
+                if (!ctx || ctx.state !== 'running') return;
+                try {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = type || 'square';
+                    osc.frequency.value = freq || 440;
+                    gain.gain.value = vol || 0.25;
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + (dur || 0.1));
+                } catch (e) { /* тихо */ }
+            }
+
+            // === ЗАГРУЗКА ФАЙЛОВ ===
+            let audioBuffer = null;
+            let fileSource = null;
+
+            function loadFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        try {
+                            if (!ctx) init();
+                            const arrayBuffer = e.target.result;
+                            audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                            resolve(audioBuffer);
+                        } catch (err) { reject(err); }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            function playFile(volume, rate, loop) {
+                if (!audioBuffer || !ctx) return;
+                if (!active) init();
+                if (ctx.state !== 'running') return;
+                try {
+                    if (fileSource) { try { fileSource.stop(); } catch (e) {} }
+                    fileSource = ctx.createBufferSource();
+                    fileSource.buffer = audioBuffer;
+                    fileSource.loop = loop || false;
+                    fileSource.playbackRate.value = rate || 1;
+                    const gain = ctx.createGain();
+                    gain.gain.value = volume || 0.5;
+                    fileSource.connect(gain);
+                    gain.connect(ctx.destination);
+                    fileSource.start();
+                } catch (e) { /* тихо */ }
+            }
+
+            function stopFile() {
+                if (fileSource) { try { fileSource.stop(); } catch (e) {} }
+                fileSource = null;
+            }
+
+            function getBuffer() { return audioBuffer; }
+
+            // События для активации
+            document.addEventListener('click', () => { if (!active) init(); });
+            document.addEventListener('touchstart', () => { if (!active) init(); });
+
+            return {
+                init,
+                play,
+                loadFile,
+                playFile,
+                stopFile,
+                getBuffer,
+                isActive: () => active,
+                updateUI,
+                getCtx: () => ctx
+            };
+        })();
+
+        // ================================================================
+        //  КОНФИГИ
+        // ================================================================
+
+        // Базовые ноты для грида (4 ряда × 4 колонки)
+        const GRID_NOTES = [
+            // Ряд 0 (бас)
+            [220, 277, 330, 392],
+            // Ряд 1 (низкие)
+            [440, 554, 659, 784],
+            // Ряд 2 (средние)
+            [880, 1108, 1318, 1568],
+            // Ряд 3 (высокие)
+            [1760, 2217, 2637, 3136]
+        ];
+
+        const GRID_LABELS = [
+            ['C3', 'D3', 'E3', 'F3'],
+            ['G3', 'A3', 'B3', 'C4'],
+            ['D4', 'E4', 'F4', 'G4'],
+            ['A4', 'B4', 'C5', 'D5']
+        ];
+
+        // Пресеты
+        const PRESETS = {
+            hitPlayer: { freq: 880, dur: 0.12, type: 'square', vol: 0.35, label: 'Бац!' },
+            hitAI: { freq: 660, dur: 0.12, type: 'square', vol: 0.35, label: 'Боц!' },
+            wall: { freq: 440, dur: 0.08, type: 'square', vol: 0.25, label: 'Тык!' },
+            goalPlayer: { freq: 1200, dur: 0.25, type: 'square', vol: 0.4, label: 'Дзынь!' },
+            goalAI: { freq: 300, dur: 0.25, type: 'square', vol: 0.4, label: 'Пыщ!' },
+            boost: { freq: 1000, dur: 0.15, type: 'square', vol: 0.3, label: 'Вау!' },
+            spin: { freq: 750, dur: 0.18, type: 'sawtooth', vol: 0.2, label: 'Вжжик' },
+            spark: { freq: 1400, dur: 0.06, type: 'square', vol: 0.2, label: 'Искры', spark: true },
+            chord_major: { freq: 440, dur: 0.3, type: 'sine', vol: 0.25, label: 'Мажор', chord: [0, 4, 7] },
+            chord_minor: { freq: 440, dur: 0.3, type: 'sine', vol: 0.25, label: 'Минор', chord: [0, 3, 7] }
+        };
+
+        // ================================================================
+        //  СОСТОЯНИЕ
+        // ================================================================
+        let sequence = [];
+        let comboParams = {
+            mode: 'chord',
+            interval: 4,
+            voices: 3,
+            delay: 120,
+            freq: 440,
+            dur: 0.12,
+            type: 'square',
+            vol: 0.3
+        };
+
+        // ================================================================
+        //  UI — ГРИД
+        // ================================================================
+        const gridEl = document.getElementById('gridController');
+
+        GRID_NOTES.forEach((row, ri) => {
+            row.forEach((freq, ci) => {
+                const btn = document.createElement('div');
+                btn.className = 'grid-btn';
+                btn.dataset.row = ri;
+                btn.dataset.col = ci;
+                btn.dataset.freq = freq;
+                btn.innerHTML = `
+                    <span class="freq-label">${freq}</span>
+                    <span>${GRID_LABELS[ri][ci]}</span>
+                    <span class="label">${ri+1}·${ci+1}</span>
+                `;
+                btn.title = `${freq} Гц · ${GRID_LABELS[ri][ci]}`;
+
+                btn.addEventListener('click', (e) => {
+                    if (e.shiftKey) {
+                        // Shift+клик — добавить в последовательность
+                        addToSequence(freq, 0.12, 'square', 0.3);
+                        btn.classList.add('active');
+                        setTimeout(() => btn.classList.remove('active'), 200);
+                    } else {
+                        // Обычный клик — играть звук
+                        Synth.play(freq, 0.15, 'square', 0.25);
+                        btn.classList.add('active');
+                        setTimeout(() => btn.classList.remove('active'), 150);
+                    }
+                });
+
+                // Двойной клик — изменить волну
+                btn.addEventListener('dblclick', () => {
+                    const types = ['square', 'sawtooth', 'sine', 'triangle'];
+                    const current = comboParams.type;
+                    const idx = (types.indexOf(current) + 1) % types.length;
+                    comboParams.type = types[idx];
+                    btn.style.borderColor = `rgba(0,255,200,${0.2 + idx * 0.1})`;
+                    Synth.play(freq, 0.08, types[idx], 0.2);
+                });
+
+                gridEl.appendChild(btn);
+            });
+        });
+
+        // ================================================================
+        //  UI — ПОСЛЕДОВАТЕЛЬНОСТЬ
+        // ================================================================
+        const seqStepsEl = document.getElementById('sequenceSteps');
+
+        function renderSequence() {
+            seqStepsEl.innerHTML = '';
+            if (sequence.length === 0) {
+                seqStepsEl.innerHTML = '<span style="color:#444;font-size:11px;">Нет нот · клик по гриду с Shift</span>';
+                document.getElementById('seqCount').textContent = '0 нот';
+                return;
+            }
+            sequence.forEach((item, idx) => {
+                const step = document.createElement('div');
+                step.className = 'seq-step';
+                step.textContent = Math.round(item.freq);
+                step.title = `${item.freq} Гц · ${item.type}`;
+                step.addEventListener('click', () => {
+                    Synth.play(item.freq, 0.12, item.type, item.vol);
+                });
+                const remove = document.createElement('span');
+                remove.className = 'remove-step';
+                remove.textContent = '✕';
+                remove.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    sequence.splice(idx, 1);
+                    renderSequence();
+                });
+                step.appendChild(remove);
+                seqStepsEl.appendChild(step);
+            });
+            document.getElementById('seqCount').textContent = `${sequence.length} нот`;
+        }
+        renderSequence();
+
+        function addToSequence(freq, dur, type, vol) {
+            sequence.push({ freq, dur: dur || 0.12, type: type || 'square', vol: vol || 0.3 });
+            renderSequence();
+        }
+
+        // ================================================================
+        //  КОМБИНАТОР
+        // ================================================================
+
+        function getComboFreqs() {
+            const base = comboParams.freq || 440;
+            const interval = parseInt(document.getElementById('comboInterval').value) || 4;
+            const voices = parseInt(document.getElementById('comboVoices').value) || 3;
+            const freqs = [];
+            for (let i = 0; i < voices; i++) {
+                const offset = i * interval;
+                let f = base + offset;
+                if (f < 50) f = 50;
+                if (f > 4000) f = 4000;
+                freqs.push(f);
+            }
+            return freqs;
+        }
+
+        function playCombo() {
+            const mode = document.getElementById('comboMode').value;
+            const delay = parseInt(document.getElementById('comboDelayVal').value) || 120;
+            const freqs = getComboFreqs();
+            const dur = comboParams.dur || 0.12;
+            const type = comboParams.type || 'square';
+            const vol = comboParams.vol || 0.3;
+
+            if (mode === 'chord') {
+                freqs.forEach((f, i) => {
+                    const v = vol * (1 - i * 0.08);
+                    Synth.play(f, dur, type, Math.max(0.05, v));
+                });
+            } else if (mode === 'sequence') {
+                freqs.forEach((f, i) => {
+                    const v = vol * (1 - i * 0.05);
+                    setTimeout(() => Synth.play(f, dur * 0.8, type, Math.max(0.05, v)), i * delay);
+                });
+            } else if (mode === 'arpeggio') {
+                freqs.forEach((f, i) => {
+                    const v = vol * (1 - i * 0.08);
+                    setTimeout(() => Synth.play(f, dur * 0.5, type, Math.max(0.05, v)), i * (delay * 0.3));
+                });
+            }
+        }
+
+        function playSequence() {
+            if (sequence.length === 0) return;
+            const delay = parseInt(document.getElementById('comboDelayVal').value) || 120;
+            sequence.forEach((item, idx) => {
+                setTimeout(() => {
+                    Synth.play(item.freq, item.dur || 0.12, item.type || 'square', item.vol || 0.3);
+                }, idx * delay);
+            });
+        }
+
+        // ================================================================
+        //  ГЕНЕРАЦИЯ КОДА
+        // ================================================================
+
+        function generateCode() {
+            let code = '// ===== NEON SYNTH — СГЕНЕРИРОВАННЫЙ КОД =====\n\n';
+
+            // Базовые пресеты
+            Object.keys(PRESETS).forEach(key => {
+                const p = PRESETS[key];
+                if (p.spark) {
+                    code += `function ${key}() {\n`;
+                    code += `  playBeep(${p.freq}, ${p.dur}, '${p.type}', ${p.vol});\n`;
+                    code +=
+                        `  setTimeout(() => playBeep(${Math.round(p.freq*0.78)}, ${(p.dur*1.2).toFixed(2)}, '${p.type}', ${(p.vol*0.9).toFixed(2)}), 80);\n`;
+                    code +=
+                        `  setTimeout(() => playBeep(${Math.round(p.freq*0.57)}, ${(p.dur*1.4).toFixed(2)}, '${p.type}', ${(p.vol*0.8).toFixed(2)}), 180);\n`;
+                    code += `}\n\n`;
+                } else if (p.chord) {
+                    code += `function ${key}() {\n`;
+                    p.chord.forEach((offset, i) => {
+                        const f = p.freq + offset * 10;
+                        code +=
+                            `  playBeep(${f}, ${p.dur}, '${p.type}', ${(p.vol * (1 - i*0.05)).toFixed(2)});\n`;
+                    });
+                    code += `}\n\n`;
+                } else {
+                    code += `function ${key}() { playBeep(${p.freq}, ${p.dur}, '${p.type}', ${p.vol}); }\n`;
+                }
+            });
+
+            // Последовательность
+            if (sequence.length > 0) {
+                code += `\n// ===== Последовательность (${sequence.length} нот) =====\n`;
+                code += `function playSequence() {\n`;
+                const delay = parseInt(document.getElementById('comboDelayVal').value) || 120;
+                sequence.forEach((item, idx) => {
+                    code +=
+                        `  setTimeout(() => playBeep(${item.freq}, ${item.dur||0.12}, '${item.type||'square'}', ${item.vol||0.3}), ${idx*delay});\n`;
+                });
+                code += `}\n`;
+            }
+
+            // Текущий звук
+            code += `\n// ===== Текущий звук =====\n`;
+            code +=
+                `// playBeep(${comboParams.freq}, ${comboParams.dur}, '${comboParams.type}', ${comboParams.vol});\n`;
+
+            // Загруженный файл
+            const buffer = Synth.getBuffer();
+            if (buffer) {
+                const fileInput = document.getElementById('soundFileInput');
+                const name = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : 'sound';
+                const cleanName = name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+                const vol = parseFloat(document.getElementById('fileVol').value) || 0.5;
+                const rate = parseFloat(document.getElementById('fileRate').value) || 1;
+                const loop = document.getElementById('fileLoop').checked;
+                code += `\n// ===== Загруженный звук: ${name} =====\n`;
+                code += `// Для использования загрузи звук при старте игры:\n`;
+                code += `// const audioCtx = new AudioContext();\n`;
+                code += `// let audioBuffer;\n`;
+                code += `// fetch('${name}').then(r=>r.arrayBuffer()).then(buf=>audioCtx.decodeAudioData(buf)).then(b=>{ audioBuffer=b; });\n\n`;
+                code += `function play${cleanName}() {\n`;
+                code += `  if (!audioBuffer) return;\n`;
+                code += `  const ctx = new (window.AudioContext || window.webkitAudioContext)();\n`;
+                code += `  const source = ctx.createBufferSource();\n`;
+                code += `  source.buffer = audioBuffer;\n`;
+                code += `  source.loop = ${loop};\n`;
+                code += `  source.playbackRate.value = ${rate};\n`;
+                code += `  const gain = ctx.createGain();\n`;
+                code += `  gain.gain.value = ${vol};\n`;
+                code += `  source.connect(gain);\n`;
+                code += `  gain.connect(ctx.destination);\n`;
+                code += `  source.start();\n`;
+                code += `}\n`;
+            }
+
+            return code;
+        }
+
+        // ================================================================
+        //  СОБЫТИЯ
+        // ================================================================
+
+        // Активация
+        document.getElementById('activateBtn').onclick = () => {
+            Synth.init();
+            Synth.updateUI();
+            document.getElementById('activateBtn').textContent = '✅ Готово';
+            document.getElementById('activateBtn').classList.add('active');
+        };
+
+        // Загрузка файлов
+        const fileInput = document.getElementById('soundFileInput');
+        const fileName = document.getElementById('fileName');
+        const fileControls = document.getElementById('fileControls');
+        const playFileBtn = document.getElementById('playFileBtn');
+
+        fileInput.onchange = async function() {
+            const file = this.files[0];
+            if (!file) return;
+            fileName.textContent = file.name;
+            fileName.className = 'file-name loaded';
+
+            try {
+                await Synth.loadFile(file);
+                fileControls.className = 'file-controls show';
+                playFileBtn.style.display = 'inline-block';
+                Synth.init();
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+        };
+
+        document.getElementById('fileVol').oninput = function() {
+            document.getElementById('fileVolVal').textContent = parseFloat(this.value).toFixed(2);
+            if (Synth.getBuffer()) {
+                Synth.stopFile();
+                Synth.playFile(
+                    parseFloat(document.getElementById('fileVol').value),
+                    parseFloat(document.getElementById('fileRate').value),
+                    document.getElementById('fileLoop').checked
+                );
+            }
+        };
+
+        document.getElementById('fileRate').oninput = function() {
+            document.getElementById('fileRateVal').textContent = parseFloat(this.value).toFixed(2);
+            if (Synth.getBuffer()) {
+                Synth.stopFile();
+                Synth.playFile(
+                    parseFloat(document.getElementById('fileVol').value),
+                    parseFloat(document.getElementById('fileRate').value),
+                    document.getElementById('fileLoop').checked
+                );
+            }
+        };
+
+        document.getElementById('fileLoop').onchange = function() {
+            if (Synth.getBuffer()) {
+                Synth.stopFile();
+                Synth.playFile(
+                    parseFloat(document.getElementById('fileVol').value),
+                    parseFloat(document.getElementById('fileRate').value),
+                    this.checked
+                );
+            }
+        };
+
+        playFileBtn.onclick = function() {
+            Synth.init();
+            Synth.playFile(
+                parseFloat(document.getElementById('fileVol').value),
+                parseFloat(document.getElementById('fileRate').value),
+                document.getElementById('fileLoop').checked
+            );
+        };
+
+        // Пресеты
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.onclick = function() {
+                const key = this.dataset.preset;
+                const p = PRESETS[key];
+                if (!p) return;
+                comboParams.freq = p.freq;
+                comboParams.dur = p.dur;
+                comboParams.type = p.type;
+                comboParams.vol = p.vol;
+
+                if (p.spark) {
+                    Synth.play(p.freq, p.dur, p.type, p.vol);
+                    setTimeout(() => Synth.play(Math.round(p.freq * 0.78), p.dur * 1.2, p.type, p.vol * 0.9), 80);
+                    setTimeout(() => Synth.play(Math.round(p.freq * 0.57), p.dur * 1.4, p.type, p.vol * 0.8), 180);
+                } else if (p.chord) {
+                    p.chord.forEach((offset, i) => {
+                        const f = p.freq + offset * 10;
+                        setTimeout(() => Synth.play(f, p.dur, p.type, p.vol * (1 - i * 0.05)), i * 30);
+                    });
+                } else {
+                    Synth.play(p.freq, p.dur, p.type, p.vol);
+                }
+            };
+        });
+
+        // Комбо
+        document.getElementById('comboDelay').oninput = function() {
+            document.getElementById('comboDelayVal').textContent = this.value;
+        };
+
+        document.getElementById('playComboBtn').onclick = playCombo;
+
+        document.getElementById('addComboToSeq').onclick = function() {
+            const freqs = getComboFreqs();
+            freqs.forEach(f => {
+                addToSequence(f, comboParams.dur || 0.12, comboParams.type || 'square', comboParams.vol || 0.3);
+            });
+        };
+
+        document.getElementById('clearComboBtn').onclick = function() {
+            sequence = [];
+            renderSequence();
+        };
+
+        document.getElementById('playSeqBtn').onclick = playSequence;
+
+        document.getElementById('clearSeqBtn').onclick = function() {
+            sequence = [];
+            renderSequence();
+        };
+
+        // Копирование кода
+        document.getElementById('copySeqBtn').onclick = function() {
+            const code = generateCode();
+            document.getElementById('codeOutput').textContent = code;
+            navigator.clipboard.writeText(code).then(() => {
+                this.textContent = '✅';
+                setTimeout(() => this.textContent = '📋 Код', 1200);
+            });
+        };
+
+        document.getElementById('copyAllCodeBtn').onclick = function() {
+            const code = generateCode();
+            document.getElementById('codeOutput').textContent = code;
+            navigator.clipboard.writeText(code).then(() => {
+                this.textContent = '✅ Копия!';
+                setTimeout(() => this.textContent = '📋 Копировать всё', 1500);
+            });
+        };
+
+        // Инициализация
+        Synth.updateUI();
+
+        console.log('🎹 NEON SYNTH STUDIO загружен!');
+        console.log('📁 Загружай файлы, создавай комбинации, копируй код в игру.');
+    </script>
+
+</body>
+</html>
