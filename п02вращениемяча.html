@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NeonPongFight - РЕАЛЬНАЯ ФИЗИКА МЯЧА</title>
+  <style>
+    body { margin: 0; padding: 0; background: #0a0a0a; overflow: hidden; font-family: 'Courier New', monospace; }
+    canvas { display: block; cursor: none; }
+    
+    #ui {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 24px;
+      text-shadow: 0 0 20px rgba(0,255,255,0.5);
+      pointer-events: none;
+      z-index: 10;
+      text-align: center;
+    }
+    
+    #score {
+      font-size: 48px;
+      font-weight: bold;
+      background: linear-gradient(90deg, #00ffff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      padding: 0 20px;
+    }
+    
+    #physics-info {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 10;
+      text-align: center;
+      background: rgba(0,0,0,0.7);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.05);
+      font-family: 'Courier New', monospace;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div>СЧЁТ</div>
+  <div id="score">0 : 0</div>
+</div>
+
+<div id="physics-info">
+  ⚡ Скорость: <span id="speed-display">0.0</span> &nbsp;|&nbsp; 
+  🔄 Вращение: <span id="rotation-display">0.0</span> рад/с &nbsp;|&nbsp;
+  📐 Угол: <span id="angle-display">0</span>°
+</div>
+
+<script>
+// ============================================================
+// 1. НАСТРОЙКА КАНВАСА
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ============================================================
+// 2. ФИЗИЧЕСКИЕ КОНСТАНТЫ
+// ============================================================
+const PHYSICS = {
+  // Параметры мяча
+  BALL_RADIUS: 14,           // Радиус в пикселях
+  BALL_MASS: 1.0,            // Масса (кг)
+  BALL_DENSITY: 0.8,         // Плотность (относительная)
+  BALL_FRICTION: 0.3,        // Коэффициент трения при скольжении
+  BALL_RESTITUTION: 0.85,    // Упругость при ударе
+  
+  // Момент инерции для шара: I = 2/5 * m * R²
+  // Для 2D используем I = 0.4 * m * R²
+  
+  // Параметры платформ
+  PADDLE_WIDTH: 150,
+  PADDLE_HEIGHT: 18,
+  PADDLE_FRICTION: 0.4,      // Трение платформы
+  
+  // Максимальная скорость
+  MAX_SPEED: 15,
+  MIN_SPEED: 4
+};
+
+// ============================================================
+// 3. ЗОНЫ
+// ============================================================
+const zones = {
+  player: { minY: 0, maxY: 0 },
+  ai: { minY: 0, maxY: 0 }
+};
+
+function updateZones() {
+  const half = canvas.height / 2;
+  zones.player.minY = half + 30;
+  zones.player.maxY = canvas.height - PHYSICS.PADDLE_HEIGHT - 10;
+  zones.ai.minY = 10;
+  zones.ai.maxY = half - PHYSICS.PADDLE_HEIGHT - 30;
+}
+
+// ============================================================
+// 4. КЛАСС МЯЧА (полноценный физический объект)
+// ============================================================
+class Ball {
+  constructor(x, y) {
+    // Позиция
+    this.x = x;
+    this.y = y;
+    this.radius = PHYSICS.BALL_RADIUS;
+    
+    // Скорость (линейная)
+    this.vx = 0;
+    this.vy = 0;
+    
+    // Вращение (угловая скорость в рад/с)
+    this.angularVelocity = 0;
+    this.rotation = 0; // текущий угол поворота
+    
+    // Физические параметры
+    this.mass = PHYSICS.BALL_MASS;
+    this.density = PHYSICS.BALL_DENSITY;
+    this.restitution = PHYSICS.BALL_RESTITUTION;
+    this.friction = PHYSICS.BALL_FRICTION;
+    
+    // Момент инерции для шара (2D): I = 0.5 * m * R²
+    // Для диска: I = 0.5 * m * R²
+    this.inertia = 0.5 * this.mass * this.radius * this.radius;
+    
+    // След для визуализации вращения
+    this.trail = [];
+    this.spinMarkers = []; // метки на поверхности мяча
+  }
+  
+  // Получить скорость (модуль)
+  get speed() {
+    return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+  }
+  
+  // Получить кинетическую энергию
+  get kineticEnergy() {
+    const linear = 0.5 * this.mass * (this.vx * this.vx + this.vy * this.vy);
+    const rotational = 0.5 * this.inertia * this.angularVelocity * this.angularVelocity;
+    return linear + rotational;
+  }
+  
+  // Обновить позицию
+  update(dt = 1) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.rotation += this.angularVelocity * dt;
+    
+    // Обновляем след
+    this.trail.push({ x: this.x, y: this.y, life: 1 });
+    if (this.trail.length > 15) this.trail.shift();
+    this.trail.forEach(t => t.life *= 0.92);
+    
+    // Визуальные маркеры вращения (точки на поверхности)
+    this.spinMarkers = [];
+    for (let i = 0; i < 4; i++) {
+      const angle = this.rotation + (i / 4) * Math.PI * 2;
+      this.spinMarkers.push({
+        x: this.x + this.radius * 0.7 * Math.cos(angle),
+        y: this.y + this.radius * 0.7 * Math.sin(angle),
+        angle: angle
+      });
+    }
+  }
+  
+  // Применить силу (для изменения скорости)
+  applyForce(fx, fy) {
+    this.vx += fx / this.mass;
+    this.vy += fy / this.mass;
+  }
+  
+  // Применить крутящий момент
+  applyTorque(torque) {
+    this.angularVelocity += torque / this.inertia;
+  }
+  
+  // Ограничить скорость
+  clampSpeed() {
+    const speed = this.speed;
+    if (speed > PHYSICS.MAX_SPEED) {
+      this.vx = (this.vx / speed) * PHYSICS.MAX_SPEED;
+      this.vy = (this.vy / speed) * PHYSICS.MAX_SPEED;
+    }
+    if (speed < PHYSICS.MIN_SPEED && speed > 0) {
+      this.vx = (this.vx / speed) * PHYSICS.MIN_SPEED;
+      this.vy = (this.vy / speed) * PHYSICS.MIN_SPEED;
+    }
+  }
+  
+  // Отрисовка мяча с учётом вращения
+  draw(ctx) {
+    // Свечение
+    const glow = ctx.createRadialGradient(
+      this.x, this.y, 0,
+      this.x, this.y, this.radius * 3
+    );
+    glow.addColorStop(0, 'rgba(255,255,255,0.15)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Основной шар
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
+    
+    // Тень
+    ctx.shadowColor = 'rgba(255,255,255,0.3)';
+    ctx.shadowBlur = 25;
+    
+    // Градиент для объёма
+    const grad = ctx.createRadialGradient(
+      -this.radius * 0.3, -this.radius * 0.3, 0,
+      0, 0, this.radius
+    );
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.3, '#88ddff');
+    grad.addColorStop(0.7, '#4488ff');
+    grad.addColorStop(1, '#224488');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Линии вращения (меридианы)
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(this.radius * 0.85 * Math.cos(angle), this.radius * 0.85 * Math.sin(angle));
+      ctx.stroke();
+    }
+    
+    // Круглая метка для визуализации вращения
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Центральная точка
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Маркер вращения (красная точка на поверхности)
+    ctx.fillStyle = '#ff4466';
+    ctx.shadowColor = '#ff4466';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(this.radius * 0.85, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    ctx.restore();
+    
+    // Маркеры вращения (следы на поверхности)
+    this.spinMarkers.forEach(marker => {
+      ctx.fillStyle = `rgba(255,200,100,${0.3 * marker.life || 0.3})`;
+      ctx.beginPath();
+      ctx.arc(marker.x, marker.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+}
+
+// ============================================================
+// 5. ОБЪЕКТЫ ИГРЫ
+// ============================================================
+let game = {
+  player: {
+    x: 0,
+    y: 0,
+    width: PHYSICS.PADDLE_WIDTH,
+    height: PHYSICS.PADDLE_HEIGHT,
+    color: '#00ffff',
+    glowColor: 'rgba(0,255,255,0.3)'
+  },
+  ai: {
+    x: 0,
+    y: 0,
+    width: PHYSICS.PADDLE_WIDTH,
+    height: PHYSICS.PADDLE_HEIGHT,
+    color: '#ff00ff',
+    glowColor: 'rgba(255,0,255,0.3)'
+  },
+  ball: null,
+  score: { player: 0, ai: 0 },
+  mouse: { x: 0, y: 0 },
+  particles: []
+};
+
+// ============================================================
+// 6. ФИЗИКА СТОЛКНОВЕНИЙ
+// ============================================================
+
+/**
+ * Столкновение мяча с платформой с учётом вращения и трения
+ */
+function collideBallWithPaddle(ball, paddle, isPlayer) {
+  // Находим ближайшую точку на платформе к мячу
+  const closestX = Math.max(paddle.x, Math.min(ball.x, paddle.x + paddle.width));
+  const closestY = Math.max(paddle.y, Math.min(ball.y, paddle.y + paddle.height));
+  
+  const dx = ball.x - closestX;
+  const dy = ball.y - closestY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  if (distance > 0 && distance < ball.radius + 5) {
+    // Нормаль к поверхности
+    let nx = dx / distance;
+    let ny = dy / distance;
+    
+    // Если мяч внутри платформы - выталкиваем
+    if (distance < 1) {
+      if (isPlayer) {
+        ny = -1;
+        ball.y = paddle.y - ball.radius;
+      } else {
+        ny = 1;
+        ball.y = paddle.y + paddle.height + ball.radius;
+      }
+      return false;
+    }
+    
+    // Относительная скорость в точке контакта
+    // Для вращающегося мяча: v = v_linear + ω × r
+    const r_x = -dy; // перпендикуляр к нормали
+    const r_y = dx;
+    const v_rot_x = ball.angularVelocity * r_x;
+    const v_rot_y = ball.angularVelocity * r_y;
+    
+    const rel_vx = ball.vx - v_rot_x;
+    const rel_vy = ball.vy - v_rot_y;
+    
+    // Нормальная и тангенциальная составляющие
+    const vn = rel_vx * nx + rel_vy * ny;
+    const vt = -rel_vx * ny + rel_vy * nx;
+    
+    // Упругое столкновение (нормальная составляющая)
+    const vn_new = -ball.restitution * vn;
+    
+    // Трение (тангенциальная составляющая)
+    const frictionForce = PHYSICS.PADDLE_FRICTION * Math.abs(vn);
+    let vt_new = vt;
+    if (Math.abs(vt) > 0.1) {
+      const frictionSign = vt > 0 ? 1 : -1;
+      vt_new = vt - frictionSign * Math.min(Math.abs(vt), frictionForce);
+    }
+    
+    // Применяем изменение скорости
+    ball.vx += (vn_new - vn) * nx + (vt_new - vt) * (-ny);
+    ball.vy += (vn_new - vn) * ny + (vt_new - vt) * nx;
+    
+    // Передаём часть тангенциального импульса во вращение
+    const torque = (vt - vt_new) * ball.radius * 0.3;
+    ball.applyTorque(torque);
+    
+    // Добавляем небольшое случайное вращение при ударе
+    ball.angularVelocity += (Math.random() - 0.5) * 0.02;
+    
+    // Выталкиваем мяч из платформы
+    if (isPlayer) {
+      ball.y = paddle.y - ball.radius - 1;
+    } else {
+      ball.y = paddle.y + paddle.height + ball.radius + 1;
+    }
+    
+    // Ограничиваем вращение
+    ball.angularVelocity = Math.max(-3, Math.min(3, ball.angularVelocity));
+    
+    // Добавляем эффект частиц
+    createCollisionParticles(ball.x, ball.y, paddle.color, 8);
+    
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Столкновение мяча со стенами
+ */
+function collideWithWalls(ball) {
+  let hit = false;
+  
+  // Левая и правая стены
+  if (ball.x - ball.radius < 0) {
+    ball.x = ball.radius;
+    ball.vx = Math.abs(ball.vx) * ball.restitution;
+    // Вращение от трения о стену
+    ball.angularVelocity += ball.vy * 0.02;
+    hit = true;
+  } else if (ball.x + ball.radius > canvas.width) {
+    ball.x = canvas.width - ball.radius;
+    ball.vx = -Math.abs(ball.vx) * ball.restitution;
+    ball.angularVelocity -= ball.vy * 0.02;
+    hit = true;
+  }
+  
+  // Верх и низ (голы обрабатываются отдельно)
+  if (ball.y - ball.radius < 0) {
+    ball.y = ball.radius;
+    ball.vy = Math.abs(ball.vy) * ball.restitution;
+    ball.angularVelocity += ball.vx * 0.02;
+    hit = true;
+  } else if (ball.y + ball.radius > canvas.height) {
+    ball.y = canvas.height - ball.radius;
+    ball.vy = -Math.abs(ball.vy) * ball.restitution;
+    ball.angularVelocity -= ball.vx * 0.02;
+    hit = true;
+  }
+  
+  if (hit) {
+    createCollisionParticles(ball.x, ball.y, '#ffffff', 5);
+  }
+  
+  return hit;
+}
+
+/**
+ * Создание частиц при столкновении
+ */
+function createCollisionParticles(x, y, color, count = 10) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 3;
+    game.particles.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 2 + Math.random() * 4,
+      color: color
+    });
+  }
+}
+
+// ============================================================
+// 7. ОБНОВЛЕНИЕ
+// ============================================================
+function update() {
+  const ball = game.ball;
+  const player = game.player;
+  const ai = game.ai;
+  
+  if (!ball) return;
+  
+  // ----- УПРАВЛЕНИЕ ИГРОКОМ -----
+  player.x = game.mouse.x - player.width / 2;
+  player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+  
+  let targetY = game.mouse.y - 30;
+  player.y = Math.max(zones.player.minY, Math.min(zones.player.maxY, targetY));
+  
+  // ----- УПРАВЛЕНИЕ AI -----
+  // Предсказываем позицию мяча с учётом вращения (сложный AI)
+  const predictTime = 20;
+  const ballFutureX = ball.x + ball.vx * predictTime;
+  const ballFutureY = ball.y + ball.vy * predictTime;
+  
+  ai.x = ballFutureX - ai.width / 2;
+  ai.x = Math.max(0, Math.min(canvas.width - ai.width, ai.x));
+  
+  // AI реагирует на вращение (усложнённый паттерн)
+  const spinFactor = ball.angularVelocity * 2;
+  const targetY_ai = ballFutureY + spinFactor * 5;
+  ai.y = Math.max(zones.ai.minY, Math.min(zones.ai.maxY, targetY_ai));
+  
+  // ----- ФИЗИКА МЯЧА -----
+  // Движение
+  ball.update(1);
+  
+  // Сопротивление воздуха (очень слабое)
+  ball.vx *= 0.9995;
+  ball.vy *= 0.9995;
+  ball.angularVelocity *= 0.999;
+  
+  // ----- СТОЛКНОВЕНИЯ -----
+  // Со стенами
+  collideWithWalls(ball);
+  
+  // С платформой игрока (мяч летит вниз)
+  if (ball.vy > 0) {
+    collideBallWithPaddle(ball, player, true);
+  }
+  
+  // С платформой AI (мяч летит вверх)
+  if (ball.vy < 0) {
+    collideBallWithPaddle(ball, ai, false);
+  }
+  
+  // ----- ГОЛЫ -----
+  if (ball.y > canvas.height + 50) {
+    game.score.ai++;
+    resetBall(false);
+  }
+  if (ball.y < -50) {
+    game.score.player++;
+    resetBall(true);
+  }
+  
+  // ----- ОБНОВЛЕНИЕ ЧАСТИЦ -----
+  game.particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.life -= p.decay;
+  });
+  game.particles = game.particles.filter(p => p.life > 0);
+  
+  // ----- ОБНОВЛЕНИЕ UI -----
+  document.getElementById('score').textContent = `${game.score.player} : ${game.score.ai}`;
+  document.getElementById('speed-display').textContent = ball.speed.toFixed(1);
+  document.getElementById('rotation-display').textContent = ball.angularVelocity.toFixed(2);
+  
+  const angleDeg = Math.atan2(ball.vy, ball.vx) * 180 / Math.PI;
+  document.getElementById('angle-display').textContent = Math.round(angleDeg);
+}
+
+// ============================================================
+// 8. СБРОС МЯЧА
+// ============================================================
+function resetBall(playerScored) {
+  const ball = game.ball;
+  ball.x = canvas.width / 2;
+  ball.y = canvas.height / 2;
+  ball.trail = [];
+  ball.spinMarkers = [];
+  ball.rotation = 0;
+  ball.angularVelocity = 0;
+  
+  const angle = (Math.random() - 0.5) * Math.PI * 0.4;
+  const direction = playerScored ? 1 : -1;
+  const speed = PHYSICS.MIN_SPEED + Math.random() * 2;
+  ball.vx = speed * Math.sin(angle) * direction;
+  ball.vy = speed * direction * Math.cos(angle);
+}
+
+// ============================================================
+// 9. ОТРИСОВКА
+// ============================================================
+function draw() {
+  const ball = game.ball;
+  const player = game.player;
+  const ai = game.ai;
+  
+  // ----- ФОН -----
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // ----- СЕТКА -----
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.setLineDash([8, 12]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height / 2);
+  ctx.lineTo(canvas.width, canvas.height / 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // ----- ЧАСТИЦЫ -----
+  game.particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+  ctx.globalAlpha = 1;
+  
+  // ----- ПЛАТФОРМЫ (с градиентом) -----
+  drawPaddle(player, player.color, player.glowColor);
+  drawPaddle(ai, ai.color, ai.glowColor);
+  
+  // ----- МЯЧ -----
+  if (ball) {
+    ball.draw(ctx);
+    
+    // Вектор скорости
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.setLineDash([4, 6]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ball.x, ball.y);
+    const len = Math.min(ball.speed * 3, 60);
+    const norm = ball.speed || 1;
+    ctx.lineTo(ball.x + (ball.vx / norm) * len, ball.y + (ball.vy / norm) * len);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  // ----- ИНФОРМАЦИЯ О ВРАЩЕНИИ (дуга) -----
+  if (ball && Math.abs(ball.angularVelocity) > 0.01) {
+    ctx.strokeStyle = `rgba(255,200,100,${Math.min(Math.abs(ball.angularVelocity) * 0.1, 0.5)})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const arcRadius = ball.radius + 12;
+    const startAngle = ball.rotation;
+    const endAngle = startAngle + ball.angularVelocity * 0.5;
+    ctx.arc(ball.x, ball.y, arcRadius, startAngle, endAngle);
+    ctx.stroke();
+    
+    // Стрелка направления вращения
+    const arrowAngle = endAngle;
+    const arrowX = ball.x + arcRadius * Math.cos(arrowAngle);
+    const arrowY = ball.y + arcRadius * Math.sin(arrowAngle);
+    ctx.fillStyle = 'rgba(255,200,100,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX - 6 * Math.cos(arrowAngle - 0.5), arrowY - 6 * Math.sin(arrowAngle - 0.5));
+    ctx.lineTo(arrowX - 6 * Math.cos(arrowAngle + 0.5), arrowY - 6 * Math.sin(arrowAngle + 0.5));
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// 10. ОТРИСОВКА ПЛАТФОРМЫ
+// ============================================================
+function drawPaddle(paddle, color, glowColor) {
+  const x = paddle.x;
+  const y = paddle.y;
+  const w = paddle.width;
+  const h = paddle.height;
+  
+  // Свечение
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 25;
+  
+  // Основная форма
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, color);
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+  grad.addColorStop(1, color);
+  
+  // Скруглённая платформа
+  const radius = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  
+  ctx.fillStyle = grad;
+  ctx.fill();
+  
+  // Обводка
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 15;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  // Центральная линия
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(x + w/2 - 1, y + 4, 2, h - 8);
+  
+  // Декоративные точки
+  for (let i = 0; i < 5; i++) {
+    const px = x + (i / 4) * w;
+    ctx.fillStyle = i === 2 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.arc(px, y + h/2, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// 11. УПРАВЛЕНИЕ
+// ============================================================
+canvas.addEventListener('mousemove', (e) => {
+  game.mouse.x = e.clientX;
+  game.mouse.y = e.clientY;
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  game.mouse.x = e.touches[0].clientX;
+  game.mouse.y = e.touches[0].clientY;
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  game.mouse.x = e.touches[0].clientX;
+  game.mouse.y = e.touches[0].clientY;
+});
+
+// ============================================================
+// 12. РЕСАЙЗ
+// ============================================================
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  updateZones();
+}
+
+window.addEventListener('resize', resize);
+
+// ============================================================
+// 13. ЗАПУСК
+// ============================================================
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// Инициализация
+game.ball = new Ball(canvas.width / 2, canvas.height / 2);
+initGame();
+
+function initGame() {
+  updateZones();
+  resetBall(true);
+  game.particles = [];
+}
+
+gameLoop();
+
+console.log('🏓 NeonPongFight - РЕАЛЬНАЯ ФИЗИКА МЯЧА');
+console.log(`📐 Масса: ${PHYSICS.BALL_MASS} кг, Радиус: ${PHYSICS.BALL_RADIUS}px`);
+console.log(`🔄 Момент инерции: ${game.ball.inertia.toFixed(2)}`);
+console.log('⚡ Вращение передаётся при скользящих ударах!');
+</script>
+</body>
+</html>
