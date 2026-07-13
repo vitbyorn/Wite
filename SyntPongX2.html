@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🎹 NEON SYNTH PRO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: #00ffcc;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 8px;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: rgba(10, 10, 10, 0.92);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 200, 0.12);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 0 60px rgba(0, 255, 200, 0.03);
+            max-height: 98vh;
+            overflow-y: auto;
+        }
+
+        /* ===== ШАПКА ===== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.06);
+        }
+
+        .header h1 {
+            font-size: 16px;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #00ffcc, #ff44aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        .header .status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .header .status .dot.off {
+            background: #ff4444;
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.2);
+        }
+        .header .status .dot.on {
+            background: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+            animation: dotPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes dotPulse {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+        }
+
+        .btn-neon {
+            background: rgba(0, 255, 200, 0.06);
+            border: 1px solid rgba(0, 255, 200, 0.15);
+            color: #00ffcc;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            touch-action: manipulation;
+            min-height: 28px;
+            white-space: nowrap;
+        }
+
+        .btn-neon:active {
+            transform: scale(0.95);
+            background: rgba(0, 255, 200, 0.12);
+        }
+        .btn-neon:hover {
+            background: rgba(0, 255, 200, 0.1);
+            border-color: rgba(0, 255, 200, 0.3);
+        }
+        .btn-neon.active {
+            background: rgba(0, 255, 200, 0.15);
+            border-color: #00ffcc;
+        }
+        .btn-neon.danger {
+            border-color: rgba(255, 68, 68, 0.2);
+            color: #ff6666;
+        }
+        .btn-neon.danger:hover {
+            background: rgba(255, 68, 68, 0.08);
+        }
+
+        /* ===== ОСНОВНАЯ СЕТКА ===== */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+
+        /* ===== ПАД 4x4 ===== */
+        .pad-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 10px;
+            border: 1px solid rgba(0, 255, 200, 0.05);
+        }
+
+        .pad-section .section-title {
+            font-size: 9px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(0, 255, 200, 0.3);
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .pad-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .pad-btn {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            background: rgba(0, 255, 200, 0.02);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.06s;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            position: relative;
+            touch-action: manipulation;
+            min-height: 50px;
+            padding: 2px;
+        }
+
+        .pad-btn .note-name {
+            font-size: 10px;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .pad-btn .freq-label {
+            font-size: 7px;
+            color: rgba(255, 255, 255, 0.15);
+        }
+
+        .pad-btn .pad-label {
+            font-size: 6px;
+            color: rgba(255, 255, 255, 0.08);
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+        }
+
+        /* Цвета рядов */
+        .pad-btn[data-row="0"] {
+            border-color: rgba(0, 255, 200, 0.1);
+        }
+        .pad-btn[data-row="1"] {
+            border-color: rgba(255, 0, 200, 0.1);
+        }
+        .pad-btn[data-row="2"] {
+            border-color: rgba(255, 200, 0, 0.1);
+        }
+        .pad-btn[data-row="3"] {
+            border-color: rgba(0, 100, 255, 0.1);
+        }
+
+        .pad-btn:active {
+            transform: scale(0.92);
+        }
+
+        .pad-btn.active[data-row="0"] {
+            background: rgba(0, 255, 200, 0.25);
+            border-color: #00ffcc;
+            box-shadow: 0 0 25px rgba(0, 255, 200, 0.12);
+        }
+        .pad-btn.active[data-row="1"] {
+            background: rgba(255, 0, 200, 0.25);
+            border-color: #ff00cc;
+            box-shadow: 0 0 25px rgba(255, 0, 200, 0.12);
+        }
+        .pad-btn.active[data-row="2"] {
+            background: rgba(255, 200, 0, 0.25);
+            border-color: #ffcc00;
+            box-shadow: 0 0 25px rgba(255, 200, 0, 0.12);
+        }
+        .pad-btn.active[data-row="3"] {
+            background: rgba(0, 100, 255, 0.25);
+            border-color: #0066ff;
+            box-shadow: 0 0 25px rgba(0, 100, 255, 0.12);
+        }
+
+        .pad-btn.keyboard-active {
+            transform: scale(0.95);
+            border-width: 2px;
+        }
+
+        .pad-btn .sound-indicator {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 7px;
+            color: rgba(0, 255, 200, 0.3);
+        }
+
+        .pad-btn .preset-indicator {
+            position: absolute;
+            bottom: 2px;
+            left: 4px;
+            font-size: 6px;
+            color: rgba(255, 255, 255, 0.1);
+            max-width: 80%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ===== ИНФОРМАЦИОННАЯ ПАНЕЛЬ ===== */
+        .info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 255, 200, 0.04);
+            min-height: 28px;
+        }
+
+        .info-row .label {
+            font-size: 8px;
+            color: #555;
+            letter-spacing: 1px;
+            min-width: 50px;
+        }
+
+        .info-row .value {
+            font-size: 10px;
+            color: #00ffcc;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .info-row .value.freq {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .info-row .controls {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .info-row input[type="range"] {
+            flex: 1;
+            min-width: 40px;
+            max-width: 80px;
+            background: rgba(255, 255, 255, 0.05);
+            height: 2px;
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .info-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ffcc;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 200, 0.2);
+        }
+
+        .info-row input[type="range"]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ffcc;
+            cursor: pointer;
+            border: none;
+        }
+
+        .info-row select {
+            background: rgba(0, 0, 0, 0.3);
+            color: #00ffcc;
+            border: 1px solid rgba(0, 255, 200, 0.08);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: inherit;
+            font-size: 9px;
+            cursor: pointer;
+        }
+
+        .info-row select:focus {
+            outline: none;
+            border-color: rgba(0, 255, 200, 0.2);
+        }
+
+        /* ===== КОМБИНАТОР (компактный) ===== */
+        .combo-display {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            padding: 4px 0;
+            min-height: 28px;
+            align-items: center;
+        }
+
+        .combo-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 6px;
+            background: rgba(0, 255, 200, 0.05);
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            border-radius: 4px;
+            font-size: 9px;
+            color: #00ffcc;
+            transition: all 0.2s;
+        }
+
+        .combo-note .remove-note {
+            color: #ff4444;
+            cursor: pointer;
+            font-size: 7px;
+            opacity: 0.5;
+        }
+
+        .combo-note .remove-note:hover {
+            opacity: 1;
+        }
+
+        .combo-note .note-freq {
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 7px;
+        }
+
+        .combo-empty {
+            color: #444;
+            font-size: 9px;
+            font-style: italic;
+        }
+
+        /* ===== КЛАВИАТУРНАЯ ПОДСКАЗКА ===== */
+        .keyboard-hint {
+            background: rgba(0, 255, 200, 0.02);
+            border: 1px solid rgba(0, 255, 200, 0.04);
+            border-radius: 8px;
+            padding: 6px 8px;
+            margin-bottom: 8px;
+        }
+
+        .keyboard-hint .hint-title {
+            font-size: 8px;
+            color: #444;
+            letter-spacing: 1px;
+            margin-bottom: 3px;
+        }
+
+        .keyboard-hint .key-row {
+            display: flex;
+            gap: 2px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .key-hint {
+            display: inline-block;
+            padding: 1px 5px;
+            background: rgba(0, 255, 200, 0.04);
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            border-radius: 3px;
+            font-size: 8px;
+            color: #555;
+            min-width: 20px;
+            text-align: center;
+            transition: all 0.1s;
+        }
+
+        .key-hint.active {
+            background: rgba(0, 255, 200, 0.12);
+            border-color: #00ffcc;
+            color: #00ffcc;
+        }
+
+        .key-hint .key-note {
+            color: #333;
+            font-size: 6px;
+            display: block;
+        }
+
+        /* ===== СЕКЦИЯ С КНОПКАМИ ===== */
+        .action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+            justify-content: center;
+        }
+
+        .action-bar .btn-neon {
+            font-size: 9px;
+            padding: 3px 10px;
+            min-height: 24px;
+        }
+
+        /* ===== КОД ===== */
+        .code-section {
+            margin-top: 8px;
+            border-top: 1px solid rgba(0, 255, 200, 0.04);
+            padding-top: 8px;
+        }
+
+        .code-section .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .code-section .code-header span {
+            font-size: 8px;
+            color: #444;
+            letter-spacing: 1px;
+        }
+
+        .code-section pre {
+            color: #88ddff;
+            font-size: 9px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            max-height: 60px;
+            overflow-y: auto;
+            margin: 0;
+            padding: 4px 6px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .code-section pre::-webkit-scrollbar {
+            width: 3px;
+        }
+        .code-section pre::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 200, 0.1);
+            border-radius: 2px;
+        }
+
+        /* ===== СКРОЛЛ ===== */
+        ::-webkit-scrollbar {
+            width: 3px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 200, 0.1);
+            border-radius: 2px;
+        }
+
+        /* ===== АДАПТИВ ===== */
+        @media (max-width: 600px) {
+            .container {
+                padding: 8px;
+                border-radius: 12px;
+            }
+
+            .header h1 {
+                font-size: 13px;
+            }
+
+            .pad-btn {
+                min-height: 40px;
+                font-size: 9px;
+            }
+            .pad-btn .note-name {
+                font-size: 8px;
+            }
+            .pad-btn .freq-label {
+                font-size: 6px;
+            }
+
+            .info-row {
+                padding: 3px 6px;
+                min-height: 24px;
+            }
+            .info-row .label {
+                font-size: 7px;
+                min-width: 35px;
+            }
+            .info-row .value {
+                font-size: 9px;
+            }
+
+            .key-hint {
+                font-size: 7px;
+                padding: 1px 4px;
+                min-width: 16px;
+            }
+
+            .combo-note {
+                font-size: 8px;
+                padding: 1px 4px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .pad-btn {
+                min-height: 32px;
+                border-radius: 4px;
+            }
+            .pad-btn .note-name {
+                font-size: 7px;
+            }
+            .pad-btn .freq-label,
+            .pad-btn .pad-label {
+                display: none;
+            }
+        }
+
+        /* ===== АНИМАЦИИ ===== */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .container {
+            animation: fadeIn 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- ШАПКА -->
+        <div class="header">
+            <h1>✦ NEON SYNTH</h1>
+            <div class="status">
+                <span class="dot off" id="statusDot"></span>
+                <span id="statusText" style="font-size:9px;">Ожидание</span>
+                <button class="btn-neon" id="activateBtn" style="font-size:8px;padding:2px 8px;">▶</button>
+            </div>
+        </div>
+
+        <!-- КЛАВИАТУРНАЯ ПОДСКАЗКА -->
+        <div class="keyboard-hint" id="keyboardHint">
+            <div class="hint-title">⌨️ Клавиатура: 1 2 3 4 / Q W E R / A S D F / Z X C V</div>
+            <div class="key-row" id="keyboardRow"></div>
+        </div>
+
+        <!-- ОСНОВНАЯ СЕТКА -->
+        <div class="main-grid">
+            <!-- Левый блок: ПАД -->
+            <div class="pad-section">
+                <div class="section-title">🎛️ ПАД 4×4</div>
+                <div class="pad-grid" id="padGrid"></div>
+                <div class="action-bar">
+                    <button class="btn-neon" id="clearPadBtn">🗑 Очистить</button>
+                    <button class="btn-neon" id="resetPadBtn">↺ Сброс</button>
+                    <button class="btn-neon" id="randomPadBtn">🎲 Рандом</button>
+                </div>
+            </div>
+
+            <!-- Правый блок: Информация и управление -->
+            <div class="info-panel">
+                <!-- Выбранный звук -->
+                <div class="info-row">
+                    <span class="label">ЗВУК</span>
+                    <span class="value freq" id="selectedFreq">440 Гц</span>
+                    <span class="value" id="selectedNote" style="font-size:9px;color:#666;">C4</span>
+                </div>
+
+                <!-- Настройки звука -->
+                <div class="info-row">
+                    <span class="label">ВОЛНА</span>
+                    <select id="waveType">
+                        <option value="square">Квадрат</option>
+                        <option value="sawtooth">Пила</option>
+                        <option value="sine">Синус</option>
+                        <option value="triangle">Треуг.</option>
+                    </select>
+                    <span class="label" style="margin-left:4px;">ГРОМК.</span>
+                    <input type="range" min="0" max="1" step="0.05" value="0.3" id="volumeSlider">
+                    <span class="value" id="volumeVal" style="font-size:8px;min-width:20px;">0.30</span>
+                </div>
+
+                <!-- Длительность -->
+                <div class="info-row">
+                    <span class="label">ДЛИТЕЛ.</span>
+                    <input type="range" min="0.03" max="0.5" step="0.01" value="0.12" id="durationSlider">
+                    <span class="value" id="durationVal" style="font-size:8px;min-width:30px;">0.12с</span>
+                </div>
+
+                <!-- Комбинатор -->
+                <div class="info-row" style="flex-wrap:wrap;min-height:auto;padding:6px 8px;">
+                    <span class="label" style="min-width:45px;">КОМБО</span>
+                    <select id="comboMode" style="font-size:8px;">
+                        <option value="chord">Аккорд</option>
+                        <option value="sequence">Послед.</option>
+                        <option value="arpeggio">Арпедж.</option>
+                    </select>
+                    <select id="comboInterval" style="font-size:8px;">
+                        <option value="0">Унисон</option>
+                        <option value="4">+4</option>
+                        <option value="3">-3</option>
+                        <option value="7">+7</option>
+                        <option value="12">+12</option>
+                    </select>
+                    <select id="comboVoices" style="font-size:8px;width:40px;">
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span class="label" style="min-width:20px;">DEL</span>
+                    <input type="range" min="20" max="300" value="100" step="5" id="comboDelay" style="max-width:50px;">
+                    <span class="value" id="comboDelayVal" style="font-size:8px;min-width:20px;">100</span>
+                </div>
+
+                <!-- Отображение комбинации -->
+                <div class="info-row" style="min-height:32px;flex-wrap:wrap;padding:4px 8px;">
+                    <span class="label" style="min-width:45px;">СОСТАВ</span>
+                    <div class="combo-display" id="comboDisplay">
+                        <span class="combo-empty">Нет нот</span>
+                    </div>
+                </div>
+
+                <!-- Кнопки действий -->
+                <div class="action-bar" style="justify-content:space-between;">
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <button class="btn-neon" id="playComboBtn">▶ Комбо</button>
+                        <button class="btn-neon" id="addToSeqBtn">➕ Послед.</button>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <button class="btn-neon" id="playSeqBtn">▶ Играть</button>
+                        <button class="btn-neon danger" id="clearSeqBtn">✕</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- СЕКЦИЯ С ПРЕСЕТАМИ -->
+        <div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0;justify-content:center;" id="presetBar">
+            <button class="btn-neon" data-preset="hitPlayer" style="font-size:8px;padding:2px 8px;">Бац!</button>
+            <button class="btn-neon" data-preset="hitAI" style="font-size:8px;padding:2px 8px;">Боц!</button>
+            <button class="btn-neon" data-preset="wall" style="font-size:8px;padding:2px 8px;">Тык</button>
+            <button class="btn-neon" data-preset="goalPlayer" style="font-size:8px;padding:2px 8px;">Дзынь</button>
+            <button class="btn-neon" data-preset="goalAI" style="font-size:8px;padding:2px 8px;">Пыщ</button>
+            <button class="btn-neon" data-preset="boost" style="font-size:8px;padding:2px 8px;">Вау</button>
+            <button class="btn-neon" data-preset="spin" style="font-size:8px;padding:2px 8px;">Вжж</button>
+            <button class="btn-neon" data-preset="spark" style="font-size:8px;padding:2px 8px;">Искры</button>
+            <button class="btn-neon" data-preset="chord_major" style="font-size:8px;padding:2px 8px;">Мажор</button>
+            <button class="btn-neon" data-preset="chord_minor" style="font-size:8px;padding:2px 8px;">Минор</button>
+        </div>
+
+        <!-- КОД -->
+        <div class="code-section">
+            <div class="code-header">
+                <span>📋 КОД</span>
+                <button class="btn-neon" id="copyCodeBtn" style="font-size:8px;padding:2px 8px;">Копировать</button>
+            </div>
+            <pre id="codeOutput">// Нажми на пад или создай комбинацию</pre>
+        </div>
+    </div>
+
+    <script>
+        // ================================================================
+        //  ЯДРО — АУДИО
+        // ================================================================
+        const AudioEngine = (function() {
+            let ctx = null;
+            let active = false;
+
+            function init() {
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    ctx = new AudioCtx();
+                    if (ctx.state === 'suspended') ctx.resume();
+                    active = (ctx.state === 'running');
+                    updateUI();
+                    return active;
+                } catch (e) {
+                    active = false;
+                    updateUI();
+                    return false;
+                }
+            }
+
+            function updateUI() {
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                if (active) {
+                    dot.className = 'dot on';
+                    text.textContent = '✅ Готов';
+                } else {
+                    dot.className = 'dot off';
+                    text.textContent = '🔇 Ожидание';
+                }
+            }
+
+            function play(freq, dur, type, vol) {
+                if (!active && !init()) return;
+                if (!ctx || ctx.state !== 'running') return;
+                try {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    const filter = ctx.createBiquadFilter();
+
+                    osc.type = type || 'square';
+                    osc.frequency.value = freq || 440;
+
+                    filter.type = 'lowpass';
+                    filter.frequency.value = Math.min(4000, 1200 + (freq || 440) * 0.5);
+                    filter.Q.value = 1;
+
+                    const now = ctx.currentTime;
+                    const volume = (vol || 0.25) * 0.7;
+                    gain.gain.setValueAtTime(0.01, now);
+                    gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(volume * 0.2, now + (dur || 0.1) * 0.7);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + (dur || 0.1));
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + (dur || 0.1) + 0.02);
+
+                } catch (e) { /* тихо */ }
+            }
+
+            // Автоактивация
+            document.addEventListener('click', () => { if (!active) init(); });
+            document.addEventListener('touchstart', () => { if (!active) init(); });
+
+            return {
+                init,
+                play,
+                isActive: () => active,
+                updateUI,
+                getCtx: () => ctx
+            };
+        })();
+
+        // ================================================================
+        //  КОНФИГИ
+        // ================================================================
+
+        // 4 ряда × 4 колонки — синхронизировано с клавиатурой
+        // Ряды: 1 2 3 4 (цифры), Q W E R, A S D F, Z X C V
+        const PAD_CONFIG = {
+            notes: [
+                [261.63, 293.66, 329.63, 349.23], // C4, D4, E4, F4
+                [392.00, 440.00, 493.88, 523.25], // G4, A4, B4, C5
+                [587.33, 659.25, 698.46, 783.99], // D5, E5, F5, G5
+                [880.00, 987.77, 1046.50, 1174.66] // A5, B5, C6, D6
+            ],
+            labels: [
+                ['C4', 'D4', 'E4', 'F4'],
+                ['G4', 'A4', 'B4', 'C5'],
+                ['D5', 'E5', 'F5', 'G5'],
+                ['A5', 'B5', 'C6', 'D6']
+            ],
+            keys: [
+                ['1', '2', '3', '4'],
+                ['q', 'w', 'e', 'r'],
+                ['a', 's', 'd', 'f'],
+                ['z', 'x', 'c', 'v']
+            ]
+        };
+
+        // Пресеты
+        const PRESETS = {
+            hitPlayer: { freq: 880, dur: 0.12, type: 'square', vol: 0.35 },
+            hitAI: { freq: 660, dur: 0.12, type: 'square', vol: 0.35 },
+            wall: { freq: 440, dur: 0.06, type: 'square', vol: 0.25 },
+            goalPlayer: { freq: 1200, dur: 0.2, type: 'square', vol: 0.4 },
+            goalAI: { freq: 300, dur: 0.2, type: 'square', vol: 0.4 },
+            boost: { freq: 1000, dur: 0.12, type: 'square', vol: 0.3 },
+            spin: { freq: 750, dur: 0.15, type: 'sawtooth', vol: 0.2 },
+            spark: { freq: 1400, dur: 0.04, type: 'square', vol: 0.2 },
+            chord_major: { freq: 440, dur: 0.25, type: 'sine', vol: 0.25, chord: [0, 4, 7] },
+            chord_minor: { freq: 440, dur: 0.25, type: 'sine', vol: 0.25, chord: [0, 3, 7] }
+        };
+
+        // ================================================================
+        //  СОСТОЯНИЕ
+        // ================================================================
+        let state = {
+            selectedRow: 0,
+            selectedCol: 0,
+            freq: 440,
+            dur: 0.12,
+            type: 'square',
+            vol: 0.3,
+            comboMode: 'chord',
+            comboInterval: 4,
+            comboVoices: 3,
+            comboDelay: 100,
+            sequence: [],
+            padAssignments: {} // { '0-0': {freq, note, type, vol, dur} }
+        };
+
+        // Инициализация пада стандартными значениями
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                state.padAssignments[`${r}-${c}`] = {
+                    freq: PAD_CONFIG.notes[r][c],
+                    note: PAD_CONFIG.labels[r][c],
+                    type: 'square',
+                    vol: 0.3,
+                    dur: 0.12
+                };
+            }
+        }
+
+        let activeKeys = {};
+        let comboNotes = [];
+
+        // ================================================================
+        //  UI — ПАД
+        // ================================================================
+        const padGrid = document.getElementById('padGrid');
+
+        function renderPad() {
+            padGrid.innerHTML = '';
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const btn = document.createElement('div');
+                    const key = `${r}-${c}`;
+                    const assignment = state.padAssignments[key] || { freq: PAD_CONFIG.notes[r][c], note: PAD_CONFIG
+                            .labels[r][c] };
+                    btn.className = 'pad-btn';
+                    btn.dataset.row = r;
+                    btn.dataset.col = c;
+                    btn.dataset.freq = assignment.freq;
+                    btn.dataset.key = PAD_CONFIG.keys[r][c];
+
+                    btn.innerHTML = `
+                        <span class="note-name">${assignment.note}</span>
+                        <span class="freq-label">${Math.round(assignment.freq)} Гц</span>
+                        <span class="pad-label">${PAD_CONFIG.keys[r][c].toUpperCase()}</span>
+                        ${assignment.type ? `<span class="sound-indicator">${assignment.type[0]}</span>` : ''}
+                        ${assignment.custom ? `<span class="preset-indicator">★</span>` : ''}
+                    `;
+
+                    // Клик мыши
+                    btn.addEventListener('click', (e) => {
+                        if (e.shiftKey) {
+                            // Shift+клик — добавить в комбо
+                            const freq = parseFloat(btn.dataset.freq);
+                            addToCombo(freq);
+                            btn.classList.add('active');
+                            setTimeout(() => btn.classList.remove('active'), 150);
+                        } else {
+                            playPadSound(btn);
+                        }
+                    });
+
+                    // Touch для мобильных
+                    btn.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        playPadSound(btn);
+                        if (navigator.vibrate) navigator.vibrate(5);
+                        btn.classList.add('active');
+                        setTimeout(() => btn.classList.remove('active'), 100);
+                    });
+
+                    // Двойной клик — редактирование звука
+                    btn.addEventListener('dblclick', () => {
+                        const freq = parseFloat(btn.dataset.freq);
+                        state.freq = freq;
+                        updateInfoPanel(freq, PAD_CONFIG.labels[r][c]);
+                        document.getElementById('selectedFreq').textContent = `${Math.round(freq)} Гц`;
+                        document.getElementById('selectedNote').textContent = PAD_CONFIG.labels[r][c];
+                    });
+
+                    padGrid.appendChild(btn);
+                }
+            }
+            updateKeyboardHint();
+        }
+
+        function playPadSound(btn) {
+            const freq = parseFloat(btn.dataset.freq);
+            const dur = parseFloat(document.getElementById('durationSlider').value) || 0.12;
+            const type = document.getElementById('waveType').value;
+            const vol = parseFloat(document.getElementById('volumeSlider').value) || 0.3;
+
+            // Проверяем кастомное назначение
+            const key = `${btn.dataset.row}-${btn.dataset.col}`;
+            const assignment = state.padAssignments[key];
+            if (assignment && assignment.custom) {
+                AudioEngine.play(assignment.freq, assignment.dur || dur, assignment.type || type, assignment.vol || vol);
+            } else {
+                AudioEngine.play(freq, dur, type, vol);
+            }
+
+            btn.classList.add('active');
+            setTimeout(() => btn.classList.remove('active'), 150);
+
+            // Обновляем инфо
+            const note = PAD_CONFIG.labels[parseInt(btn.dataset.row)][parseInt(btn.dataset.col)];
+            document.getElementById('selectedFreq').textContent = `${Math.round(freq)} Гц`;
+            document.getElementById('selectedNote').textContent = note;
+            state.freq = freq;
+        }
+
+        // ================================================================
+        //  UI — КЛАВИАТУРА
+        // ================================================================
+        function updateKeyboardHint() {
+            const row = document.getElementById('keyboardRow');
+            row.innerHTML = '';
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const key = PAD_CONFIG.keys[r][c];
+                    const note = PAD_CONFIG.labels[r][c];
+                    const span = document.createElement('span');
+                    span.className = 'key-hint';
+                    span.dataset.key = key;
+                    span.innerHTML = `${key.toUpperCase()}<span class="key-note">${note}</span>`;
+                    row.appendChild(span);
+                }
+            }
+        }
+
+        // Клавиатурный ввод
+        const keyMap = {};
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                keyMap[PAD_CONFIG.keys[r][c]] = { row: r, col: c, freq: PAD_CONFIG.notes[r][c] };
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (keyMap[key] && !activeKeys[key]) {
+                activeKeys[key] = true;
+                const { row, col, freq } = keyMap[key];
+                const dur = parseFloat(document.getElementById('durationSlider').value) || 0.12;
+                const type = document.getElementById('waveType').value;
+                const vol = parseFloat(document.getElementById('volumeSlider').value) || 0.3;
+
+                // Проверяем кастомное назначение
+                const padKey = `${row}-${col}`;
+                const assignment = state.padAssignments[padKey];
+                if (assignment && assignment.custom) {
+                    AudioEngine.play(assignment.freq, assignment.dur || dur, assignment.type || type, assignment.vol ||
+                    vol);
+                } else {
+                    AudioEngine.play(freq, dur, type, vol);
+                }
+
+                // Подсветка
+                const keyHint = document.querySelector(`.key-hint[data-key="${key}"]`);
+                if (keyHint) keyHint.classList.add('active');
+
+                const padBtn = document.querySelector(`.pad-btn[data-key="${key}"]`);
+                if (padBtn) {
+                    padBtn.classList.add('keyboard-active');
+                    setTimeout(() => padBtn.classList.remove('keyboard-active'), 150);
+                }
+
+                // Обновляем инфо
+                document.getElementById('selectedFreq').textContent = `${Math.round(freq)} Гц`;
+                document.getElementById('selectedNote').textContent = PAD_CONFIG.labels[row][col];
+                state.freq = freq;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keyMap[key]) {
+                activeKeys[key] = false;
+                const keyHint = document.querySelector(`.key-hint[data-key="${key}"]`);
+                if (keyHint) keyHint.classList.remove('active');
+            }
+        });
+
+        // ================================================================
+        //  UI — КОМБИНАТОР
+        // ================================================================
+        const comboDisplay = document.getElementById('comboDisplay');
+
+        function addToCombo(freq) {
+            comboNotes.push(freq);
+            renderCombo();
+        }
+
+        function renderCombo() {
+            comboDisplay.innerHTML = '';
+            if (comboNotes.length === 0) {
+                comboDisplay.innerHTML = '<span class="combo-empty">Нет нот</span>';
+                return;
+            }
+            comboNotes.forEach((freq, idx) => {
+                const span = document.createElement('span');
+                span.className = 'combo-note';
+                span.innerHTML = `
+                    ${Math.round(freq)} Гц
+                    <span class="remove-note" data-idx="${idx}">✕</span>
+                `;
+                span.querySelector('.remove-note').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    comboNotes.splice(idx, 1);
+                    renderCombo();
+                });
+                // Клик по ноте — проиграть
+                span.addEventListener('click', () => {
+                    AudioEngine.play(freq, state.dur, state.type, state.vol);
+                });
+                comboDisplay.appendChild(span);
+            });
+        }
+
+        function getComboFreqs() {
+            if (comboNotes.length > 0) return comboNotes;
+            // Если нет ручных нот, генерируем из параметров
+            const base = state.freq;
+            const interval = parseInt(document.getElementById('comboInterval').value) || 4;
+            const voices = parseInt(document.getElementById('comboVoices').value) || 3;
+            const freqs = [];
+            for (let i = 0; i < voices; i++) {
+                freqs.push(base + i * interval);
+            }
+            return freqs;
+        }
+
+        function playCombo() {
+            const mode = document.getElementById('comboMode').value;
+            const delay = parseInt(document.getElementById('comboDelay').value) || 100;
+            const freqs = getComboFreqs();
+            const dur = parseFloat(document.getElementById('durationSlider').value) || 0.12;
+            const type = document.getElementById('waveType').value;
+            const vol = parseFloat(document.getElementById('volumeSlider').value) || 0.3;
+
+            if (mode === 'chord') {
+                freqs.forEach((f, i) => {
+                    const v = vol * (1 - i * 0.07);
+                    AudioEngine.play(f, dur, type, Math.max(0.05, v));
+                });
+            } else if (mode === 'sequence') {
+                freqs.forEach((f, i) => {
+                    setTimeout(() => AudioEngine.play(f, dur * 0.8, type, vol * 0.8), i * delay);
+                });
+            } else if (mode === 'arpeggio') {
+                freqs.forEach((f, i) => {
+                    setTimeout(() => AudioEngine.play(f, dur * 0.5, type, vol * 0.7), i * delay * 0.4);
+                });
+            }
+        }
+
+        // ================================================================
+        //  UI — ПОСЛЕДОВАТЕЛЬНОСТЬ
+        // ================================================================
+        document.getElementById('addToSeqBtn').addEventListener('click', () => {
+            const freqs = getComboFreqs();
+            freqs.forEach(f => {
+                state.sequence.push({ freq: f, dur: state.dur, type: state.type, vol: state.vol });
+            });
+            updateCode();
+        });
+
+        document.getElementById('playSeqBtn').addEventListener('click', () => {
+            if (state.sequence.length === 0) return;
+            const delay = parseInt(document.getElementById('comboDelay').value) || 100;
+            state.sequence.forEach((item, idx) => {
+                setTimeout(() => {
+                    AudioEngine.play(item.freq, item.dur || 0.12, item.type || 'square', item.vol || 0.3);
+                }, idx * delay);
+            });
+        });
+
+        document.getElementById('clearSeqBtn').addEventListener('click', () => {
+            state.sequence = [];
+            updateCode();
+        });
+
+        // ================================================================
+        //  UI — ПАНЕЛЬ УПРАВЛЕНИЯ
+        // ================================================================
+
+        // Обновление инфо панели
+        function updateInfoPanel(freq, note) {
+            document.getElementById('selectedFreq').textContent = `${Math.round(freq)} Гц`;
+            document.getElementById('selectedNote').textContent = note || '';
+        }
+
+        // Слайдеры
+        document.getElementById('volumeSlider').addEventListener('input', function() {
+            document.getElementById('volumeVal').textContent = parseFloat(this.value).toFixed(2);
+        });
+
+        document.getElementById('durationSlider').addEventListener('input', function() {
+            document.getElementById('durationVal').textContent = `${parseFloat(this.value).toFixed(2)}с`;
+        });
+
+        document.getElementById('comboDelay').addEventListener('input', function() {
+            document.getElementById('comboDelayVal').textContent = this.value;
+        });
+
+        // ================================================================
+        //  UI — ПРЕСЕТЫ
+        // ================================================================
+        document.querySelectorAll('[data-preset]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const key = this.dataset.preset;
+                const p = PRESETS[key];
+                if (!p) return;
+
+                // Применяем настройки
+                document.getElementById('waveType').value = p.type || 'square';
+                document.getElementById('volumeSlider').value = p.vol || 0.3;
+                document.getElementById('durationSlider').value = p.dur || 0.12;
+                document.getElementById('volumeVal').textContent = (p.vol || 0.3).toFixed(2);
+                document.getElementById('durationVal').textContent = `${(p.dur || 0.12).toFixed(2)}с`;
+
+                if (p.chord) {
+                    // Аккорд
+                    comboNotes = p.chord.map(offset => p.freq + offset * 10);
+                    renderCombo();
+                } else {
+                    // Одиночный звук
+                    AudioEngine.play(p.freq, p.dur, p.type, p.vol);
+                    state.freq = p.freq;
+                    document.getElementById('selectedFreq').textContent = `${Math.round(p.freq)} Гц`;
+                    document.getElementById('selectedNote').textContent = `${Math.round(p.freq)} Гц`;
+                }
+            });
+        });
+
+        // ================================================================
+        //  UI — УПРАВЛЕНИЕ ПАДОМ
+        // ================================================================
+
+        document.getElementById('clearPadBtn').addEventListener('click', () => {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const key = `${r}-${c}`;
+                    state.padAssignments[key] = {
+                        freq: PAD_CONFIG.notes[r][c],
+                        note: PAD_CONFIG.labels[r][c],
+                        type: 'square',
+                        vol: 0.3,
+                        dur: 0.12,
+                        custom: false
+                    };
+                }
+            }
+            renderPad();
+        });
+
+        document.getElementById('resetPadBtn').addEventListener('click', () => {
+            // Сброс к стандартным частотам
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const key = `${r}-${c}`;
+                    state.padAssignments[key] = {
+                        freq: PAD_CONFIG.notes[r][c],
+                        note: PAD_CONFIG.labels[r][c],
+                        type: 'square',
+                        vol: 0.3,
+                        dur: 0.12,
+                        custom: false
+                    };
+                }
+            }
+            renderPad();
+            comboNotes = [];
+            renderCombo();
+            state.sequence = [];
+            updateCode();
+        });
+
+        document.getElementById('randomPadBtn').addEventListener('click', () => {
+            // Случайные частоты для всех кнопок
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const key = `${r}-${c}`;
+                    const baseFreq = PAD_CONFIG.notes[r][c];
+                    const randomOffset = (Math.random() - 0.5) * 200;
+                    const newFreq = Math.max(80, baseFreq + randomOffset);
+                    state.padAssignments[key] = {
+                        freq: newFreq,
+                        note: `${Math.round(newFreq)}`,
+                        type: ['square', 'sawtooth', 'sine', 'triangle'][Math.floor(Math.random() * 4)],
+                        vol: 0.2 + Math.random() * 0.3,
+                        dur: 0.06 + Math.random() * 0.15,
+                        custom: true
+                    };
+                }
+            }
+            renderPad();
+        });
+
+        // ================================================================
+        //  ГЕНЕРАЦИЯ КОДА
+        // ================================================================
+        function updateCode() {
+            let code = '// NEON SYNTH — код для игры\n\n';
+
+            // Пад
+            code += '// ПАД 4×4 (назначения)\n';
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const key = `${r}-${c}`;
+                    const a = state.padAssignments[key];
+                    if (a && a.custom) {
+                        code += `pad[${r}][${c}] = playBeep(${Math.round(a.freq)}, ${a.dur||0.12}, '${a.type||'square'}', ${a.vol||0.3});\n`;
+                    }
+                }
+            }
+
+            // Комбо
+            if (comboNotes.length > 0) {
+                code += `\n// КОМБО (${comboNotes.length} нот)\n`;
+                const delay = parseInt(document.getElementById('comboDelay').value) || 100;
+                const mode = document.getElementById('comboMode').value;
+                code += `function playCombo() {\n`;
+                comboNotes.forEach((f, i) => {
+                    if (mode === 'chord') {
+                        code += `  playBeep(${Math.round(f)}, ${state.dur}, '${state.type}', ${state.vol});\n`;
+                    } else {
+                        const delayTime = i * (mode === 'sequence' ? delay : delay * 0.4);
+                        code +=
+                            `  setTimeout(() => playBeep(${Math.round(f)}, ${state.dur*0.8}, '${state.type}', ${state.vol*0.8}), ${delayTime});\n`;
+                    }
+                });
+                code += `}\n`;
+            }
+
+            // Последовательность
+            if (state.sequence.length > 0) {
+                code += `\n// ПОСЛЕДОВАТЕЛЬНОСТЬ (${state.sequence.length} нот)\n`;
+                const delay = parseInt(document.getElementById('comboDelay').value) || 100;
+                code += `function playSequence() {\n`;
+                state.sequence.forEach((item, idx) => {
+                    code +=
+                        `  setTimeout(() => playBeep(${Math.round(item.freq)}, ${item.dur||0.12}, '${item.type||'square'}', ${item.vol||0.3}), ${idx*delay});\n`;
+                });
+                code += `}\n`;
+            }
+
+            document.getElementById('codeOutput').textContent = code || '// Нажми на пад или создай комбинацию';
+        }
+
+        // ================================================================
+        //  СОБЫТИЯ
+        // ================================================================
+
+        document.getElementById('activateBtn').addEventListener('click', () => {
+            AudioEngine.init();
+            AudioEngine.updateUI();
+            document.getElementById('activateBtn').textContent = '✅';
+            document.getElementById('activateBtn').classList.add('active');
+            setTimeout(() => {
+                document.getElementById('activateBtn').textContent = '▶';
+                document.getElementById('activateBtn').classList.remove('active');
+            }, 2000);
+        });
+
+        document.getElementById('playComboBtn').addEventListener('click', playCombo);
+
+        document.getElementById('copyCodeBtn').addEventListener('click', () => {
+            const code = document.getElementById('codeOutput').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                document.getElementById('copyCodeBtn').textContent = '✅';
+                setTimeout(() => document.getElementById('copyCodeBtn').textContent = 'Копировать', 1500);
+            }).catch(() => {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+                document.getElementById('copyCodeBtn').textContent = '✅';
+                setTimeout(() => document.getElementById('copyCodeBtn').textContent = 'Копировать', 1500);
+            });
+        });
+
+        // Обновление кода при изменении комбо
+        document.addEventListener('click', updateCode);
+
+        // ================================================================
+        //  ИНИЦИАЛИЗАЦИЯ
+        // ================================================================
+
+        renderPad();
+        updateCode();
+        AudioEngine.updateUI();
+
+        console.log('🎹 NEON SYNTH PRO v5.0');
+        console.log('⌨️ Клавиатура: 1 2 3 4 / Q W E R / A S D F / Z X C V');
+        console.log('🖱️ Shift+клик по паду — добавить в комбо');
+        console.log('🖱️ Двойной клик по паду — выбрать звук');
+    </script>
+
+</body>
+</html>
